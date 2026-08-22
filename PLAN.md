@@ -74,7 +74,7 @@ SovereignDesk is an always-on import-compliance triage agent for U.S. customs br
  <ws>/processed/ memos/ decisions/         |     v
  <ws>/precedents.jsonl  HOST, DELIBERATE ..|.. read at classify time; written only by
    ^                                       |   engine/record_precedent.mjs
- Qwen served by NemoClaw                   |     v
+ Llama 3.3 70B via NemoClaw                |     v
    +-- inference.local proxy --------------|   memos/<id>.memo.md, fixed format
                                            |   own netns: no route to host localhost
  console 127.0.0.1:7777, host side,        |   all other egress: DROPPED
@@ -91,7 +91,7 @@ SovereignDesk is an always-on import-compliance triage agent for U.S. customs br
 
 | Layer | Choice | Fallback if it fights you |
 |---|---|---|
-| Inference | NemoClaw managed vLLM, `nvidia/Qwen3.6-35B-A3B-NVFP4` | `NEMOCLAW_PROVIDER=ollama NEMOCLAW_MODEL=qwen3.6:35b`, USB-staged, zero image pull |
+| Inference | `NEMOCLAW_PROVIDER=ollama NEMOCLAW_MODEL=llama3.3:70b`, USB-staged | `qwen3.6:35b` (MoE, 3B active, much faster memos) also staged, zero image pull |
 | Sandbox | OpenShell, policy DROP, FS scoped to the share mount | narrow the FS scope; DROP is never what gets relaxed |
 | Agent | OpenClaw cron, 2 minute tick | `node engine/process_inbox.mjs --root <ws>` by hand |
 | Engine | Node `.mjs`, zero deps, no `package.json`, no build | none, `bash scripts/smoke.sh` is green today |
@@ -108,7 +108,11 @@ The console exists: `lanes/6-channel-ui/server.mjs` plus `index.html`, zero deps
 - **NemoClaw**: connection and inference layer. Provisions the sandbox, serves the model. **Not a memory database.** "NemoClaw stores the precedents" is wrong; `precedents.jsonl` is a file on the host mount.
 - **OpenClaw**: the agent. Runs the cron loop, calls the engine, writes the memo.
 - **OpenShell**: container and sandbox runtime. Kernel isolation plus the DROP policy.
-- **Qwen**: the model, served locally, zero cloud calls.
+- **Llama 3.3 70B** (`llama3.3:70b`): the model, served locally, zero cloud calls. Team
+  decision 2026-08-22. Watch the exact tag: "Llama 3.2 70B" does not exist, the 70B models
+  are 3.1 and 3.3. Dense 70B is slower per memo than the 35B-A3B MoE originally planned;
+  the engine decides everything, so the model only writes prose, and `qwen3.6:35b` stays
+  staged as the fast fallback.
 
 All four are load-bearing. Confirm every NemoClaw and OpenClaw subcommand with `--help` on the day; `bash lanes/1-inference/doctor.sh` prints one screen of box state and probes for all three binaries.
 
@@ -265,7 +269,7 @@ Watcher, state machine, agent, console with a live feed. All lies, real wiring.
 
 ### Phase 3: build the real modules, lanes in parallel, nobody merges
 
-- **1** keeps Qwen serving, stays on call.
+- **1** keeps the model serving, stays on call.
 - **2** drafts the drop policy and the blocked-egress shot list. Does not apply the policy yet.
 - **3** sample 001 (`triage.mjs:141-145`: `rowIsParts` at `:143` is true for both 8413 rows, so the halving at `:145` never fires at all), then `pga_flags.json` and `lpco_rules.json` re-derived from the agencies' published requirements. Re-sweep all six samples after every edit.
 - **4** `node lanes/4-memory/eval_retrieval.mjs`, then the teardown rehearsal. Does not rebuild the store.
@@ -304,7 +308,7 @@ stops. Each lane fakes its piece first, then swaps in real parts one at a time.
 
 ### Lane 1, inference and the box
 
-**Owns:** GB10 over SSH, Qwen served, NemoClaw/OpenShell sandbox up with the project
+**Owns:** GB10 over SSH, Llama 3.3 70B served, NemoClaw/OpenShell sandbox up with the project
 share-mounted. Gates every other lane.
 
 **Done:** inside the sandbox `node engine/process_inbox.mjs --root .` prints
@@ -321,7 +325,7 @@ managed vLLM only on fast wifi, abandon rather than debate; share-mount; announc
 
 ```bash
 bash lanes/1-inference/doctor.sh                             # box state, one screen
-export NEMOCLAW_PROVIDER=ollama NEMOCLAW_MODEL=qwen3.6:35b   # skips Express and the vLLM pull
+export NEMOCLAW_PROVIDER=ollama NEMOCLAW_MODEL=llama3.3:70b  # skips Express and the vLLM pull
 nemoclaw customs-desk --help                                 # alpha CLI, confirm every verb
 nemoclaw share mount ~/sovereigndesk /workspace/sovereigndesk && nemoclaw customs-desk connect
 ```
@@ -568,7 +572,9 @@ Lane 6 also needs `policy-list` output and the two-terminal screenshot.
   refuses fetch, upload, delete, and that layer is a prompt, not a kernel rule, say so.
   Structural: it cannot change a code, codes come from the engine and only a human reclassify
   appends a precedent. Worst case is a bad memo a human reads anyway.
-- **Why Qwen?** NemoClaw's Express default on GB10, strongest open tool-caller at that size,
+- **Why Llama 3.3 70B?** Strong instruction-following for the memo, tool calling works, ~43 GB
+  at Q4 on a 128 GB box. The deterministic engine carries the domain accuracy, so model choice
+  is about prose and latency, not correctness. NemoClaw's Express default (Qwen3.6-35B-A3B) is
   one-line swap.
 - **Scale?** One box per desk, 128 GB runs a second sandbox as reviewer, append-only JSONL merges
   across desks by concatenation.
@@ -579,21 +585,22 @@ Lane 6 also needs `policy-list` output and the two-terminal screenshot.
 
 Name these before a judge finds them.
 
-- **The precedent floor is wrong in both directions, and we measured it.** `node
-  lanes/4-memory/eval_retrieval.mjs`: the tightest passing paraphrase clears PRECEDENT_FLOOR
-  (`triage.mjs:176`, 0.55) by 0.006, and "LED lamp", the terse description real invoices use,
-  scores 0.286 and does not fire. In the other direction a genuinely different product,
-  "Portable USB rechargeable LED reading light lamp", matches at 0.75 and is promoted to `READY`
-  at 0.90 unattended. The answer is disclosure, not a floor change: `precedent.similarity` goes
-  in the memo.
-- **Sample 001 never reached READY.** Pump casing: 8413.70.20.05 scores 15, 8413.91.90.96 scores
-  13, confidence 0.54. The second choice is right, a casing is a part. The parts-vs-whole logic
-  at `triage.mjs:141-145` only half fires: `rowIsParts` at `:143` is true for both 8413 rows, so
-  the boost cancels out and the halving at `:145` never runs. Neither one-liner alone reaches
-  `READY`, both measured. Fix `:143` and `:145` together, then re-sweep all six.
-- **Warm 006 reads READY while listing a missing DOE certification**: 9405 pulls a requirement
-  8513 did not, and status comes from confidence and the declared check, not the LPCO list.
-  Do not read that line aloud; if asked, say exactly that.
+- **We found a retrieval false positive ourselves and changed the design for it.** A reading
+  lamp matched the night-light precedent at 0.75 and used to be silently promoted to `READY`
+  against the precedent's own reason. Now only a near-exact match (>= 0.90) binds; anything
+  between 0.55 and 0.90 is `PRECEDENT_SUGGESTED`: the broker's reason is shown and a human
+  decides. `eval_retrieval.mjs` fails the build if anything below 0.90 ever binds again. Tell
+  this story proactively: a memory that knows when it is sure beats one that is always sure.
+- **Sample 001 used to misclassify and the fix is instructive.** The casing scored as a whole
+  pump because the USITC swap made every 8413 description carry "part thereof" from the chapter
+  heading, so the parts test was true for both rows and the penalty never ran. Fixed at
+  `triage.mjs:143` (heading-path test for a real "Parts:" segment) plus `:145` (0.35). Now
+  8413.91.90.96 at 0.77, READY, asserted by `scripts/smoke.sh`. If a judge asks how the engine
+  can be wrong: this is the worked example, and the confidence floor caught it before the fix.
+- **Warm 006 reads READY while listing a missing DOE certification.** Intended: `READY` means
+  the classification needs no human judgment; missing documents are a chase list, and only a
+  hard `REQUIRED` agency flag forces review. 9405 pulls a DOE requirement 8513 did not. If
+  asked, say exactly that; do not read the missing-docs line aloud unprompted.
 
 ---
 
@@ -606,7 +613,8 @@ Name these before a judge finds them.
 | aarch64 image or Python wheel incompatibility | High | `uname -m` must print `aarch64`. No `docker build`, no Docker Hub pull, no `pip`. OpenShell is the container runtime, NemoClaw provisions. The engine is Node: zero dependencies, no build step. |
 | NemoClaw or OpenClaw alpha CLI flags have changed | High | Every subcommand in this plan is unverified against the installed build. Confirm with `nemoclaw --help` and `openclaw --help` on the day. |
 | `share mount` puts the workspace in the wrong place | Medium | Fallback is `connect` plus copying the project in, but that lands `precedents.jsonl` inside the sandbox and kills lane 4's teardown. Tell lane 4. |
-| Model slow, or the agent will not hold the memo format | Medium | Smaller Qwen staged on the USB; cut the format to four lines. The engine carries the accuracy and the console renders its JSON directly, so the memo is garnish. Fix the prompt, never the engine. |
+| Model slow, or the agent will not hold the memo format | Medium, and higher with a dense 70B than it was with the 35B-A3B MoE | `qwen3.6:35b` staged on the USB is the fast fallback (3B active params); cut the memo format to four lines. The engine output is the product, the memo is garnish. |
+
 | Judges read it as "just a rules engine" | Medium | Lead with the unattended loop, `curl` failing inside the sandbox while the pipeline runs, and an override surviving a sandbox rebuild. A wrong code is a penalty, not a typo: determinism is the pitch. |
 | Team size. The brief records 2 to 4 builders and we are 6 | Medium | Confirm with the organizers at check-in, before anyone opens a laptop. Lane 6 asks, lane 2 if it gets to the desk first. |
 | A fee figure quoted on camera is wrong | Medium | MPF min (`32.71`) and max (`634.62`) in `engine/data/surcharges.json` are tagged `VERIFY-CBP-FY2026` and CBP resets both each fiscal year. Confirm, or quote the 0.3464% rate and not the clamp. |
