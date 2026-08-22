@@ -137,13 +137,13 @@ export function tariffLookup(hts) {
 // embeddings binds 6 of 7 with no loss of precision, and "LED lamp" goes from 0.286 (never
 // fires) to 0.767 (surfaced). See lanes/4-memory/mongo/FINDINGS.md.
 //
-// Still zero npm dependencies: the embedding is one fetch() to a LOCAL Ollama (never Voyage
-// AI, which is MongoDB-hosted and would break the zero-egress guarantee), and the 768-float
-// query vector rides into mongosh through file mode, not argv.
+// Still zero npm dependencies: the embedding comes from a LOCAL Ollama (never Voyage AI,
+// which is MongoDB-hosted and would break the zero-egress guarantee). The 768-float query
+// vector goes in through --eval, not file mode: it serialises to ~10KB, well under the
+// 32,767-char Windows CreateProcess limit that forces the tariff bulk load onto a file, and
+// a host-side temp file is invisible to a mongosh running inside a container.
 //
 // Off by default. MEMORY_RETRIEVAL unset => byte-identical to the Jaccard path above.
-import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -187,7 +187,6 @@ export function cosineToEngineScale(c) {
 
 export function hybridMatch(description, floor, expectedCount) {
   const qv = embedText(description);
-  const tmp = path.join(os.tmpdir(), `sd-hybrid-${process.pid}-${Math.random().toString(36).slice(2)}.js`);
   const script = [
     `const qv = ${JSON.stringify(qv)};`,
     `const col = db.getSiblingDB(${JSON.stringify(dbName())}).${PRECEDENTS_COLL};`,
@@ -199,9 +198,8 @@ export function hybridMatch(description, floor, expectedCount) {
     `]).toArray();`,
     `print(JSON.stringify({ count, top }));`,
   ].join("\n");
-  fs.writeFileSync(tmp, script);
-  try {
-    const { count, top } = runEval(tmp, { file: true });
+  {
+    const { count, top } = runEval(script);
     cachedCount = count;
     if (count !== expectedCount) {
       throw new Error(`[mongo] index db=${dbName()} has ${count} precedent docs but the JSONL store has ${expectedCount} valid records; rebuild: node scripts/mongo_sync.mjs --precedents <path>`);
@@ -213,5 +211,5 @@ export function hybridMatch(description, floor, expectedCount) {
     const sim = cosineToEngineScale(cos);
     if (sim < floor) return null;
     return { doc, sim, cosine: Math.round(cos * 1000) / 1000 };
-  } finally { fs.rmSync(tmp, { force: true }); }
+  }
 }

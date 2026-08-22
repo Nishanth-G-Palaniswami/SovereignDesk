@@ -11,8 +11,6 @@
  * precedents.jsonl remains the source of truth. This only enriches the derived index.
  */
 import { execFileSync } from "node:child_process";
-import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { mongoEnabled, dbName, runEval } from "../engine/mongo_precedents.mjs";
@@ -33,13 +31,12 @@ console.log(`${docs.length} precedent(s) need an embedding`);
 for (const d of docs) {
   const v = embed(d.description);
   if (v.length !== DIM) { console.error(`embedding is ${v.length}d, the index expects ${DIM}d`); process.exit(3); }
-  const tmp = path.join(os.tmpdir(), `sd-emb-${process.pid}-${Math.random().toString(36).slice(2)}.js`);
-  fs.writeFileSync(tmp,
+  const script =
     `const c = db.getSiblingDB(${JSON.stringify(dbName())}).precedents;` +
     `const r = c.updateOne({ _id: ObjectId(${JSON.stringify(String(d._id.$oid || d._id))}) }, { $set: { embedding: ${JSON.stringify(v)}, embedding_model: ${JSON.stringify(process.env.EMBED_MODEL || "nomic-embed-text")} } });` +
-    `print(JSON.stringify({ n: r.modifiedCount }));`);
-  try { runEval(tmp, { file: true }); console.log(`  embedded: ${String(d.description).slice(0, 60)}`); }
-  finally { fs.rmSync(tmp, { force: true }); }
+    `print(JSON.stringify({ n: r.modifiedCount }));`;
+  runEval(script);
+  console.log(`  embedded: ${String(d.description).slice(0, 60)}`);
 }
 
 // The vector index is what $vectorSearch reads. Creating it twice is harmless.
