@@ -138,5 +138,37 @@ Both are reported as `shipment_summary.fees[]`, `estimated_fees` and
 `estimated_total_payable`. `effective_rate` deliberately stays duty-only.
 
 **The MPF minimum and maximum are reset every fiscal year by CBP.** The committed figures
-are marked `VERIFY-CBP-FY2026` and must be confirmed before anyone quotes a number. The
-0.3464% rate and the 0.125% HMF rate have both been stable for years.
+are the verified FY2026 values, $33.58 and $651.50, from CBP Dec. 25-10 (90 FR 34665, read
+on govinfo 2026-08-22), current through 2026-09-30; the FY2027 notice published 2026-07-31
+supersedes them on 2026-10-01. The 0.3464% rate is statutory (19 USC 58c(a)(9)(B)(i)) and
+the FY2026 notice confirms only the limitations move. HMF is statutory at 26 USC 4461-4462
+and is not inflation-adjusted.
+
+## PGA and LPCO tables verified 2026-08-22
+
+Every rule in `pga_flags.json` now carries a `source` key citing the regulation it rests on.
+Corrections that came out of the verification, all adversarially double-checked:
+
+- **FSVP split by product.** HACCP-compliant seafood is exempt from FSVP under 21 CFR
+  1.501(b)(1), filed as an exemption affirmation, so shrimp now carries
+  `FDA_FSVP_SEAFOOD` (data OR affirmation) while supplements keep the modified-FSVP
+  identifiers (21 CFR 1.511 still requires the 1.509 name, email, DUNS).
+- **SIMP data is filed at entry, not retained.** Catch and landing data go in the ACE entry
+  filing; what is retained for two years is the chain-of-custody record.
+- **No blanket AD/CVD order on steel fasteners from China.** The 2009 petition failed at the
+  ITC. Active orders cover threaded rod (A-570-932, A-570-104/C-570-105); lock washers
+  A-570-822 was revoked 2022-05-26. The 7318 flag is now a may-flag scope check that
+  disclaims on hex bolts, nuts, washers. This flipped sample 005 to READY, which is correct.
+- **FCC filings do not happen at entry.** Form 740 was eliminated 2017-11-02; SDoC records
+  are produced on request. A laptop with WiFi needs certification for the radio, not just
+  SDoC, so the 8471 rule now says both.
+- **The ceramicware "certificate" was overstated.** FDA enforces CPG 545.400/545.450 action
+  levels through surveillance and DWPE import alerts; a leach test report is release
+  evidence, not an entry certificate. The decorative out requires the 21 CFR 109.16 label on
+  the article itself.
+- **CPC is now electronic at entry.** Since 2026-07-08 (90 FR 1800) the Children's Product
+  Certificate is filed via the ACE message set for imported children's products.
+
+Confirmed as they stood: FDA Prior Notice (21 CFR 1.277), CPSC CPC + ASTM F963 (16 CFR
+1110/1250), DOE CCMS certification as an on-file obligation (10 CFR 429.12), EPA 3520-21
+reaching only combustion engines (19 CFR 12.74), and the DOE-unflagged 8513 prefix.

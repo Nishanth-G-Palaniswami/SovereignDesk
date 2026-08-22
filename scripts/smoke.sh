@@ -100,6 +100,13 @@ expect "001 classifies the casing as a pump PART" "$(field "$R1" 'lines.0.hts')"
 expect "001 confidence clears the 0.70 floor"     "$(field "$R1" 'lines.0.confidence')" "0.77"
 expect "001 reaches READY"                        "$(field "$R1" 'shipment_summary.status')" "READY"
 
+# 005: the hex bolt correctly disclaims the AD/CVD scope check (no general steel-fasteners
+# CN order exists; the 2009 petition failed at the ITC). FCC/DOE items are records on
+# request, so nothing forces review. Verified against agency sources 2026-08-22.
+R5="$WS/results/SHP-2026-0822-005.result.json"
+expect "005 reaches READY, AD/CVD disclaimed on the hex bolt" "$(field "$R5" 'shipment_summary.status')" "READY"
+expect "005 hex bolt AD/CVD status" "$(field "$R5" 'lines.1.pga.0.status')" "DISCLAIMABLE"
+
 # ---------------------------------------------------------------- 4. duty stack
 echo
 echo "[4] duty stack is sourced, not invented"
@@ -131,15 +138,15 @@ echo
 echo "[4b] entry-level fees"
 # MPF is clamped to a per-ENTRY minimum and maximum, which is exactly what a per-line
 # ad-valorem rate cannot express. 006 has $6,300 entered, so raw MPF is $21.82 and the
-# floor must lift it to the configured minimum. If this ever equals 21.82, someone has
-# refactored the fee into the line rate and broken the clamp.
-expect "006 MPF clamped to the entry minimum" "$(field "$R6" 'shipment_summary.fees.0.amount')" "32.71"
+# floor must lift it to the FY2026 minimum of $33.58 (CBP Dec. 25-10, verified 2026-08-22).
+# If this ever equals 21.82, someone refactored the fee into the line rate and broke the clamp.
+expect "006 MPF clamped to the FY2026 entry minimum" "$(field "$R6" 'shipment_summary.fees.0.amount')" "33.58"
 expect "006 MPF named"                        "$(field "$R6" 'shipment_summary.fees.0.name')"   "MPF"
 expect "006 HMF charged on an ocean shipment" "$(field "$R6" 'shipment_summary.fees.1.amount')" "7.88"
-expect "006 total payable = duty + fees"      "$(field "$R6" 'shipment_summary.estimated_total_payable')" "2403.09"
+expect "006 total payable = duty + fees"      "$(field "$R6" 'shipment_summary.estimated_total_payable')" "2403.96"
 # 004 is not a vessel shipment, so HMF must not appear at all.
 expect "004 mode is not vessel"        "$(field "$R4" 'shipment_summary.fees.1.name')" ""
-expect "004 fees are MPF only"         "$(field "$R4" 'shipment_summary.estimated_fees')" "32.71"
+expect "004 fees are MPF only"         "$(field "$R4" 'shipment_summary.estimated_fees')" "33.58"
 # duty must NOT absorb the fees: effective_rate stays duty-only
 expect "006 effective_rate excludes fees" "$(field "$R6" 'shipment_summary.effective_rate')" "0.375"
 

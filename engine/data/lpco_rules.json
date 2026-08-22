@@ -18,26 +18,30 @@
     "Foreign manufacturer FDA Food Facility Registration number"
   ],
   "NOAA_SIMP": [
-    "IFTP, International Fisheries Trade Permit number",
-    "SIMP harvest and landing data record, retained for audit"
+    "IFTP, International Fisheries Trade Permit number, importer of record",
+    "SIMP catch and landing data, filed in the ACE entry at time of entry",
+    "SIMP chain-of-custody records, retained two years from entry"
   ],
   "CPSC_CPC": [
-    "Children's Product Certificate, CPC",
+    "Children's Product Certificate, eCPC filed at entry via ACE, 16 CFR 1110 as amended eff. 2026-07-08",
     "Third-party test report, ASTM F963, CPSC-accepted laboratory"
   ],
   "EPA_ENGINE_3520_21": [
     "EPA Form 3520-21, nonroad engine import declaration"
   ],
   "FCC_SDOC": [
-    "FCC Supplier's Declaration of Conformity, 47 CFR 2.906"
+    "FCC SDoC compliance statement supplied with product, 47 CFR 2.1077, records on request, no CBP filing"
   ],
   "DOE_CERT": [
     "DOE compliance certification report, Compliance Certification Management System"
   ],
   "FDA_CERAMICWARE": [
-    "Ceramicware lead and cadmium leach test certificate, food-contact use"
+    "Lead and cadmium leach test report, CPG 545.400 and 545.450 action levels, surveillance and DWPE evidence, not an entry certificate"
   ],
   "CBP_ADCVD_CHECK": [
-    "AD/CVD scope determination memo, case numbers and cash deposit rate"
+    "AD/CVD scope memo against active orders, threaded rod A-570-932 and A-570-104/C-570-105, case numbers and cash deposit rate if in scope"
+  ],
+  "FDA_FSVP_SEAFOOD": [
+    "FSVP importer data or seafood-HACCP exemption affirmation, 21 CFR 1.501(b) and 123.12"
   ]
 }

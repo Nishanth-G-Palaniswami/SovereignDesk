@@ -1,47 +1,199 @@
 {
-  "_comment": "Keyed by HTS prefix (digits, dots optional). semantic: must | may. 'may' flags become DISCLAIMABLE when any disclaim_if_any phrase appears in the line description, else CONFIRM. Replace with your real PGA flag table.",
+  "_comment": "Keyed by HTS prefix. semantic: must | may. 'may' flags become DISCLAIMABLE when any disclaim_if_any phrase appears in the line description, else CONFIRM. Every rule carries the regulation it rests on; verified against agency sources 2026-08-22 (see PLAN.md and docs/DATA_SWAP.md). Extra keys like source are ignored by the engine.",
   "8413": [
-    { "agency": "EPA", "requirement_id": "EPA_ENGINE_3520_21", "requirement": "Nonroad engine declaration (EPA Form 3520-21)", "semantic": "may",
-      "disclaim_if_any": ["casing", "impeller", "part", "parts", "housing", "seal kit", "without engine", "electric"] }
+    {
+      "agency": "EPA",
+      "requirement_id": "EPA_ENGINE_3520_21",
+      "requirement": "Nonroad engine declaration (EPA Form 3520-21)",
+      "semantic": "may",
+      "disclaim_if_any": [
+        "casing",
+        "impeller",
+        "part",
+        "parts",
+        "housing",
+        "seal kit",
+        "without engine",
+        "electric"
+      ],
+      "source": "19 CFR 12.74: EPA Form 3520-21 reaches only nonroad/stationary combustion engines incl. equipment containing them; the Aug 2024 form lists only engine categories, so no engine, no form. Filed at entry via ACE/DIS"
+    }
   ],
   "0306": [
-    { "agency": "FDA", "requirement_id": "FDA_PRIOR_NOTICE", "requirement": "Prior Notice of imported food", "semantic": "must" },
-    { "agency": "FDA", "requirement_id": "FDA_FSVP", "requirement": "Foreign Supplier Verification Program (FSVP) importer data", "semantic": "must" },
-    { "agency": "NOAA", "requirement_id": "NOAA_SIMP", "requirement": "Seafood Import Monitoring Program (shrimp is a covered species)", "semantic": "must" }
+    {
+      "agency": "FDA",
+      "requirement_id": "FDA_PRIOR_NOTICE",
+      "requirement": "Prior Notice of imported food",
+      "semantic": "must",
+      "source": "21 CFR 1.277 (Bioterrorism Act); ecfr.gov, verified 2026-08-22"
+    },
+    {
+      "agency": "FDA",
+      "requirement_id": "FDA_FSVP_SEAFOOD",
+      "requirement": "FSVP importer data OR seafood-HACCP exemption affirmation (fish under 21 CFR Part 123)",
+      "semantic": "must",
+      "source": "21 CFR 1.501(b)(1): Subpart L does not apply to fish from a Part 123-compliant supplier; 21 CFR 123.12"
+    },
+    {
+      "agency": "NOAA",
+      "requirement_id": "NOAA_SIMP",
+      "requirement": "Seafood Import Monitoring Program: IFTP holder of record, catch data filed in the ACE entry",
+      "semantic": "must",
+      "source": "NOAA SIMP compliance guide (Jan 2024): shrimp covered since 2018-12-31; data filed at entry, chain-of-custody records kept 2 years"
+    }
   ],
   "9503": [
-    { "agency": "CPSC", "requirement_id": "CPSC_CPC", "requirement": "Children's Product Certificate + third-party testing (ASTM F963)", "semantic": "must" }
+    {
+      "agency": "CPSC",
+      "requirement_id": "CPSC_CPC",
+      "requirement": "Children's Product Certificate + third-party testing (ASTM F963)",
+      "semantic": "must",
+      "source": "CPSA s.14, 15 USC 2063(a)(2); 16 CFR 1110 (certifier = importer, 1110.7(a)); ASTM F963 mandatory via 16 CFR 1250; eCPC filed at entry via ACE since 2026-07-08 (90 FR 1800)"
+    }
   ],
   "2106": [
-    { "agency": "FDA", "requirement_id": "FDA_PRIOR_NOTICE", "requirement": "Prior Notice of imported food", "semantic": "must" },
-    { "agency": "FDA", "requirement_id": "FDA_FSVP", "requirement": "Foreign Supplier Verification Program (FSVP) importer data", "semantic": "must" },
-    { "agency": "FDA", "requirement_id": "FDA_FACILITY_REG", "requirement": "Foreign food facility registration", "semantic": "must" }
+    {
+      "agency": "FDA",
+      "requirement_id": "FDA_PRIOR_NOTICE",
+      "requirement": "Prior Notice of imported food",
+      "semantic": "must",
+      "source": "21 CFR 1.277; ecfr.gov, verified 2026-08-22"
+    },
+    {
+      "agency": "FDA",
+      "requirement_id": "FDA_FSVP",
+      "requirement": "FSVP importer identification (modified FSVP for dietary supplements)",
+      "semantic": "must",
+      "source": "21 CFR 1.511 (modified FSVP) still requires 1.509 importer name, email and DUNS at entry"
+    },
+    {
+      "agency": "FDA",
+      "requirement_id": "FDA_FACILITY_REG",
+      "requirement": "Foreign food facility registration",
+      "semantic": "must",
+      "source": "21 CFR Part 1 Subpart H (FSMA facility registration)"
+    }
   ],
   "6912": [
-    { "agency": "FDA", "requirement_id": "FDA_CERAMICWARE", "requirement": "Ceramicware lead/cadmium compliance (food-contact)", "semantic": "may",
-      "disclaim_if_any": ["decorative", "not for food", "ornamental", "planter", "vase"] }
+    {
+      "agency": "FDA",
+      "requirement_id": "FDA_CERAMICWARE",
+      "requirement": "Ceramicware extractable lead/cadmium action levels (food-contact surveillance)",
+      "semantic": "may",
+      "disclaim_if_any": [
+        "decorative",
+        "not for food",
+        "ornamental",
+        "planter",
+        "vase"
+      ],
+      "source": "CPG 545.450 (lead) / 545.400 (cadmium) action levels; enforcement is surveillance and DWPE import alerts, not an entry certificate. Decorative out requires the 21 CFR 109.16 stick-on label plus permanent base statement on the article itself"
+    }
   ],
   "9405": [
-    { "agency": "FCC", "requirement_id": "FCC_SDOC", "requirement": "Supplier's Declaration of Conformity (digital device)", "semantic": "may",
-      "disclaim_if_any": ["non-electronic", "candle", "oil lamp"] },
-    { "agency": "DOE", "requirement_id": "DOE_CERT", "requirement": "Energy conservation standards certification (lamps)", "semantic": "may",
-      "disclaim_if_any": ["fixture only", "no lamp included", "without bulb"] }
+    {
+      "agency": "FCC",
+      "requirement_id": "FCC_SDOC",
+      "requirement": "Supplier's Declaration of Conformity (digital device)",
+      "semantic": "may",
+      "disclaim_if_any": [
+        "non-electronic",
+        "candle",
+        "oil lamp"
+      ],
+      "source": "47 CFR 15.101 table: unintentional radiators are SDoC or certification; compliance records on request (2.1204), no CBP filing since Form 740 eliminated 2017-11-02"
+    },
+    {
+      "agency": "DOE",
+      "requirement_id": "DOE_CERT",
+      "requirement": "Energy conservation standards certification (lamps)",
+      "semantic": "may",
+      "disclaim_if_any": [
+        "fixture only",
+        "no lamp included",
+        "without bulb"
+      ],
+      "source": "10 CFR 429.12: certify via CCMS before distribution in commerce; on-file obligation, not an entry document. 10 CFR 429.57 (general service lamps)"
+    }
   ],
   "8513": [
-    { "agency": "FCC", "requirement_id": "FCC_SDOC", "requirement": "Supplier's Declaration of Conformity (digital device)", "semantic": "may",
-      "disclaim_if_any": ["incandescent", "no electronics", "non-digital"] }
+    {
+      "agency": "FCC",
+      "requirement_id": "FCC_SDOC",
+      "requirement": "Supplier's Declaration of Conformity (digital device)",
+      "semantic": "may",
+      "disclaim_if_any": [
+        "incandescent",
+        "no electronics",
+        "non-digital"
+      ],
+      "source": "47 CFR 15.101 table: unintentional radiators are SDoC or certification; compliance records on request (2.1204), no CBP filing since Form 740 eliminated 2017-11-02"
+    }
   ],
   "8504": [
-    { "agency": "FCC", "requirement_id": "FCC_SDOC", "requirement": "Supplier's Declaration of Conformity (digital device)", "semantic": "may", "disclaim_if_any": ["passive", "transformer only"] },
-    { "agency": "DOE", "requirement_id": "DOE_CERT", "requirement": "External power supply efficiency certification", "semantic": "may", "disclaim_if_any": ["internal", "not external"] }
+    {
+      "agency": "FCC",
+      "requirement_id": "FCC_SDOC",
+      "requirement": "Supplier's Declaration of Conformity (digital device)",
+      "semantic": "may",
+      "disclaim_if_any": [
+        "passive",
+        "transformer only"
+      ],
+      "source": "47 CFR 15.101 table: unintentional radiators are SDoC or certification; compliance records on request (2.1204), no CBP filing since Form 740 eliminated 2017-11-02"
+    },
+    {
+      "agency": "DOE",
+      "requirement_id": "DOE_CERT",
+      "requirement": "External power supply efficiency certification",
+      "semantic": "may",
+      "disclaim_if_any": [
+        "internal",
+        "not external"
+      ],
+      "source": "10 CFR 429.12: certify via CCMS before distribution in commerce; on-file obligation, not an entry document. 10 CFR 429.37 (external power supplies)"
+    }
   ],
   "8471": [
-    { "agency": "FCC", "requirement_id": "FCC_SDOC", "requirement": "Supplier's Declaration of Conformity (digital device)", "semantic": "must" }
+    {
+      "agency": "FCC",
+      "requirement_id": "FCC_SDOC",
+      "requirement": "FCC equipment authorization: SDoC for the digital device; certification for any WiFi/Bluetooth radio",
+      "semantic": "must",
+      "source": "47 CFR 15.201(b): intentional radiators must be certified (typically via certified module); SDoC alone covers only a radio-less machine. Records on request, no entry filing"
+    }
   ],
   "8501": [
-    { "agency": "DOE", "requirement_id": "DOE_CERT", "requirement": "Small electric motor efficiency certification", "semantic": "may", "disclaim_if_any": ["dc motor", "brushless", "below scope", "toy"] }
+    {
+      "agency": "DOE",
+      "requirement_id": "DOE_CERT",
+      "requirement": "Small electric motor efficiency certification",
+      "semantic": "may",
+      "disclaim_if_any": [
+        "dc motor",
+        "brushless",
+        "below scope",
+        "toy"
+      ],
+      "source": "10 CFR 429.12: certify via CCMS before distribution in commerce; on-file obligation, not an entry document. 10 CFR 429.12 + 431 subpart B (regular electric motors; small-motor provisions never codified)"
+    }
   ],
   "7318": [
-    { "agency": "CBP", "requirement_id": "CBP_ADCVD_CHECK", "requirement": "Antidumping/countervailing duty scope check (steel fasteners)", "semantic": "must" }
+    {
+      "agency": "CBP",
+      "requirement_id": "CBP_ADCVD_CHECK",
+      "requirement": "AD/CVD scope check: threaded rod orders A-570-932 and A-570-104/C-570-105 are active; no general fasteners order",
+      "semantic": "may",
+      "disclaim_if_any": [
+        "hex bolt",
+        "hex head",
+        "cap screw",
+        "machine screw",
+        "nut",
+        "washer",
+        "self-tapping"
+      ],
+      "source": "No general steel-fasteners CN order: 2009 petition failed at the ITC (unanimous negative, 2009-11-06). Threaded rod: A-570-932 sunset affirmative May 2025; A-570-104/C-570-105 continued Jun 2025. Lock washers A-570-822 revoked 2022-05-26. Scope is the written description, not the HTS number"
+    }
   ]
 }

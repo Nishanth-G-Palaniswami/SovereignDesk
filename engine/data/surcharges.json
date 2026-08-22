@@ -2387,7 +2387,7 @@
   },
   "ad_cvd": {
     "watch_prefixes": {
-      "7318": "Steel fasteners, AD/CVD orders exist on certain origins; confirm scope and case numbers"
+      "7318": "Steel fasteners CN: NO general AD/CVD order exists (the 2009 standard-fasteners petition died on the ITC's unanimous negative, Nov 6 2009). Active on threaded rod: A-570-932 (sunset affirmative May 2025) and A-570-104/C-570-105 (continued Jun 2025). Helical lock washers A-570-822 REVOKED May 26 2022. Scope is the written product description, not the HTS number."
     }
   },
   "fees": {
@@ -2395,11 +2395,11 @@
     "mpf": {
       "enabled": true,
       "rate": 0.003464,
-      "min_usd": 32.71,
-      "max_usd": 634.62,
+      "min_usd": 33.58,
+      "max_usd": 651.5,
       "exempt_origins": [],
-      "source": "VERIFY-CBP-FY2026",
-      "note": "Merchandise Processing Fee, formal entries. The 0.3464% ad-valorem rate has been stable for years. The minimum and maximum are adjusted EVERY FISCAL YEAR for inflation under the FAST Act, and the figures here are the last ones confirmed, not FY2026 values. Verify both on CBP before quoting a number to anyone. Informal entries use a different flat fee that this engine does not model. Goods that qualify under certain trade agreements, USMCA among them, are MPF exempt; qualification is a claim about the goods and their originating status, not about the country alone, so add an origin to exempt_origins only when the claim has actually been substantiated."
+      "source": "CBP Dec. 25-10, 90 FR 34665 (FY2026 COBRA adjustment, effective 2025-10-01)",
+      "note": "Merchandise Processing Fee, formal entries. 0.3464% ad valorem (statutory, 19 USC 58c(a)(9)(B)(i), not inflation-adjusted; the FY2026 notice itself says only the limitations move). Minimum $33.58 and maximum $651.50 are the FY2026 figures from CBP Dec. 25-10, verified against the Federal Register text on govinfo 2026-08-22, current through 2026-09-30: a FY2027 notice published 2026-07-31 supersedes them effective 2026-10-01. Informal entries use flat fees this engine does not model (FY2026: $2.69 automated, $8.06 manual, $12.09 CBP-prepared). MPF exemption under trade agreements (USMCA among them) is a claim about the goods' originating status, not the country alone; add an origin to exempt_origins only when the claim is substantiated."
     },
     "hmf": {
       "enabled": true,
@@ -2407,8 +2407,8 @@
       "modes": [
         "ocean"
       ],
-      "source": "VERIFY-CBP",
-      "note": "Harbor Maintenance Fee. 0.125% of entered value, vessel shipments only, no minimum and no maximum. Not charged on air, truck or rail, which is why the engine keys it off the shipment's mode field."
+      "source": "26 USC 4461-4462 (statutory, not inflation-adjusted)",
+      "note": "Harbor Maintenance Fee. 0.125% of value on port use (loading/unloading commercial cargo from a commercial vessel), no minimum, no maximum, verified against 26 USC 4461-4462 on govinfo 2026-08-22. Absent from the annual COBRA notice because it is not inflation-adjusted. Keyed off mode=ocean; statutory exemptions exist that a mode key cannot capture."
     }
   }
 }

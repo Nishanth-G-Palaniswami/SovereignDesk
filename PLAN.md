@@ -101,7 +101,10 @@ SovereignDesk is an always-on import-compliance triage agent for U.S. customs br
 
 The console exists: `lanes/6-channel-ui/server.mjs` plus `index.html`, zero deps, binds 127.0.0.1 only. Verified up on 2026-08-22: `curl -s http://127.0.0.1:7777/api/health`. Lane 6 owns polish and the BuilderBase submission.
 
-**Not built, say it out loud.** `engine/data/pga_flags.json` and `engine/data/lpco_rules.json` are still demo tables (lane 3 owns re-deriving them). Sample 001 does not reach READY. No CBP ACE filing, no OCR, no binding-ruling lookup, no authoritative classification.
+**Not built, say it out loud.** No CBP ACE filing, no OCR, no binding-ruling lookup, no
+authoritative classification. The PGA and LPCO tables cover only the eleven rules the six
+samples exercise; each of those eleven now cites the regulation it rests on (verified against
+agency sources 2026-08-22), but a real brokerage needs the full agency tables.
 
 ### The required stack, stated exactly
 
@@ -188,27 +191,30 @@ has no such column, so the engine cannot surface it yet.
 ### Entry-level fees, `feesFor()` at engine/triage.mjs:265
 
 - MPF: 0.3464% of the ENTRY's total entered value, clamped to a per-entry minimum and
-  maximum (committed $32.71 and $634.62, `surcharges.json` `fees.mpf`).
+  maximum (FY2026: $33.58 and $651.50, `surcharges.json` `fees.mpf`).
 - HMF: 0.125% of entered value, no minimum or maximum, vessel only, keyed off the shipment's
   `mode` field. Not charged on air, truck or rail.
 - Entry-level on purpose: folding MPF into a per-line rate breaks the clamp on any
   multi-line entry.
-- CBP resets the min and max every fiscal year; `fees.mpf.source` is `VERIFY-CBP-FY2026`,
+- CBP resets the min and max every fiscal year; the FY2026 figures are verified (CBP Dec.
+  25-10, 90 FR 34665) and current through 2026-09-30 only,
   so confirm both before quoting a number.
 - Measured: the MPF minimum clamp fires on four of the six samples (001, 003, 004, 006),
   exactly what a per-line rate would have got wrong. 004 draws no HMF, mode is not vessel.
 - Reported as `shipment_summary.fees[]`, `estimated_fees`, `estimated_total_payable`.
   `effective_rate` deliberately stays duty-only.
 
-Sample 006 cold: duty $2,362.50 on $6,300, MPF $32.71 (raised to the minimum), HMF $7.88,
+Sample 006 cold: duty $2,362.50 on $6,300, MPF $33.58 (raised to the FY2026 minimum), HMF $7.88,
 total payable $2,403.09.
 
 ### Still placeholder
 
-`engine/data/pga_flags.json` and `engine/data/lpco_rules.json` are demo tables (`_comment`:
+`engine/data/pga_flags.json` and `engine/data/lpco_rules.json` were demo tables (`_comment` said:
 "Replace with your real PGA flag table"), lane 3 owns them. They are not the only placeholder
-surface any more: the MPF minimum and maximum above are tagged `VERIFY-CBP-FY2026`. Two
-surfaces, say both. Re-derive from the agencies' published requirements; do not port a table out of a
+surface any more, and as of 2026-08-22 both are verified: every PGA rule cites its regulation
+(eCFR, Federal Register, or the agency's own guide) and the MPF clamp carries the FY2026
+figures from CBP Dec. 25-10. The honest caveat left is coverage, not correctness: eleven rules,
+not the full agency tables. Re-derive from the agencies' published requirements; do not port a table out of a
 previous employer's codebase.
 
 ---
@@ -392,8 +398,9 @@ mirroring `record_precedent.mjs:39-46`, or signatures diverge silently; point th
    (the other is the MPF clamp in item 3); `pga_flags.json:2` still says "Replace with your real PGA flag table." Re-derive the ten
    `requirement_id` rules from the agencies' own published requirements. Do not port a table out
    of a previous employer's codebase; this repo goes public.
-3. Fees at `engine/triage.mjs:265`: `surcharges.json` carries MPF min 32.71 / max 634.62 marked
-   `VERIFY-CBP-FY2026` and CBP resets both each fiscal year, so confirm or they stay off stage.
+3. Fees at `engine/triage.mjs:265`: FY2026 MPF min $33.58 / max $651.50, verified against CBP
+   Dec. 25-10 (90 FR 34665) on 2026-08-22. Current through 2026-09-30; the FY2027 notice
+   published 2026-07-31 supersedes them on 2026-10-01.
    The 0.3464% rate and HMF 0.125% (vessel only) are stable.
 4. The accuracy answer card to lane 2.
 
@@ -547,7 +554,7 @@ Inputs are JSON from `engine/samples/`. PDF and OCR intake is a stated non-goal.
 | 0:00-0:20 | Problem. Entries are hand-triaged, and the documents carry pricing and customer lists that cannot go to a cloud. So nobody automates it. | 2 |
 | 0:20-0:50 | **Lockdown.** `nemoclaw $SANDBOX connect` left, `nemoclaw $SANDBOX logs --follow` right. Inside: `curl -m 5 https://hts.usitc.gov ; echo exit=$?` fails, the denial hits the log, the drop count climbs. Then `policy-list`. "Policy is drop. There is no allowlist, there is no exception." | 2 |
 | 0:50-1:20 | **First shipment.** `cp engine/samples/shipment_004_audit_risk.json engine/samples/shipment_006_precedent_test.json $WS/inbox/`, then `openclaw cron run <job-id>` (`cron list` for the id; `sweep` is the message, not a job name). The console on `127.0.0.1:7777` lights up over SSE: 004 declared 4016.93.50.50 vs engine 8413.91.90.96, delta $165 on $6,600, DECLARED_DIFFERS. Memo on-box in `$WS/memos/`. | 5, 6 |
-| 1:20-1:50 | **Correction.** Open SHP-2026-0822-006. Cold: 8513.10.20.00, conf 0.60, NEEDS_REVIEW, duty $2,362.50 on $6,300 (37.5%), MPF $32.71 at the entry minimum, HMF $7.88, total payable $2,403.09. Press `r`, enter 9405.11.60.10 and a reason (required, the reason is the memory). The memory panel flashes; the console shells out to `record_precedent.mjs`, the only sanctioned writer. | 6, 4 |
+| 1:20-1:50 | **Correction.** Open SHP-2026-0822-006. Cold: 8513.10.20.00, conf 0.60, NEEDS_REVIEW, duty $2,362.50 on $6,300 (37.5%), MPF $33.58 at the FY2026 entry minimum, HMF $7.88, total payable $2,403.96. Press `r`, enter 9405.11.60.10 and a reason (required, the reason is the memory). The memory panel flashes; the console shells out to `record_precedent.mjs`, the only sanctioned writer. | 6, 4 |
 | 1:50-2:20 | **Payoff.** `cp $WS/processed/shipment_006_precedent_test.json $WS/inbox/`, re-run the tick. Warm: 9405.11.60.10, conf 0.95, READY, $2,053.80 (32.6%), PRECEDENT_APPLIED citing the broker's words. Swing $308.70. `m` runs the A/B: memory off gets 8513, on gets 9405, same file, nothing retrained. | 4, 6 |
 | 2:20-2:40 | **Teardown.** `tail -1 $WS/precedents.jsonl` on the host. Destroy the sandbox, rebuild, re-run 006: still 9405, still READY. The store was never inside it. | 4 |
 | 2:40-3:00 | Business and non-goals: zero marginal cost on the broker's premises; no ACE filing, OCR or binding rulings; it proposes, a broker decides. Close: **the model is transient and swappable, the memory is permanent and it lives on this desk.** | 2 |
@@ -578,10 +585,41 @@ Lane 6 also needs `policy-list` output and the two-terminal screenshot.
   one-line swap.
 - **Scale?** One box per desk, 128 GB runs a second sandbox as reviewer, append-only JSONL merges
   across desks by concatenation.
-- **Not built?** ACE filing, OCR, binding rulings. `engine/data/pga_flags.json` and
-  `lpco_rules.json` are demo tables and the engine's disclaimer says so. Mesh approval
-  (self-hosted Matrix, Bitchat BLE) is a future extension off the public internet;
-  `lanes/6-channel-ui/matrix_bridge.mjs` is a spike, not demoed.
+- **Not built?** ACE filing, OCR, binding rulings. The PGA and LPCO tables cover the eleven
+  rules the samples exercise, each citing its regulation; a real brokerage needs the full
+  agency tables. Mesh approval (self-hosted Matrix, Bitchat BLE) is a future extension off
+  the public internet; `lanes/6-channel-ui/matrix_bridge.mjs` is a spike, not demoed.
+
+**Domain deep answers (lane 3 delivers these; every figure verified against the named source
+on 2026-08-22).**
+
+- **Where do the fee numbers come from?** MPF is 0.3464% of the entry, statutory at 19 USC
+  58c(a)(9)(B)(i), clamped to the FY2026 minimum $33.58 and maximum $651.50 from CBP Dec.
+  25-10 (90 FR 34665), computed on the ENTRY because a per-line rate cannot express the
+  clamp; the minimum fires on four of our six samples. HMF is 0.125%, vessel only, statutory
+  at 26 USC 4461. The figures roll on 2026-10-01 with the FY2027 notice.
+- **Why does the shrimp shipment demand so many documents?** Three regimes stack: FDA Prior
+  Notice (21 CFR 1.277, Bioterrorism Act), the seafood-HACCP posture on FSVP (exempt under
+  21 CFR 1.501(b)(1) when the supplier complies with Part 123, filed as an affirmation), and
+  NOAA SIMP (shrimp covered since 2018-12-31: the importer of record holds the IFTP, catch
+  data go IN the ACE entry, chain-of-custody records keep two years). Getting the
+  filed-at-entry versus retained split right is what a broker checks first.
+- **The toy line?** CPSIA section 14: the importer certifies, based on third-party testing at
+  a CPSC-accepted lab against ASTM F963 (16 CFR 1250), and since 2026-07-08 the certificate
+  is electronic and filed at entry via ACE (90 FR 1800). That last fact is seven weeks old.
+- **Why does the hex bolt NOT trigger AD/CVD?** No general order on steel fasteners from
+  China exists: the 2009 petition died on the ITC's unanimous negative. Threaded rod is
+  covered (A-570-932, A-570-104/C-570-105); lock washers were revoked in 2022. Scope is the
+  written product description, not the HTS number, which is why the engine runs a scope
+  check instead of assuming.
+- **The FCC and DOE items never block a shipment. Why?** Because neither is an entry
+  document. FCC Form 740 died in 2017; SDoC records are produced on request (47 CFR 2.1204),
+  and a WiFi radio needs certification, not SDoC. DOE efficiency certification is filed in
+  CCMS before distribution (10 CFR 429.12), an on-file obligation. The engine lists them as
+  records to have, and only a hard REQUIRED flag forces review.
+- **Why no EPA form on a pump shipment?** EPA 3520-21 reaches combustion engines and
+  equipment containing them (19 CFR 12.74). A casing, a part, or an electric pump has no
+  engine, so the flag disclaims; a diesel pump set would trigger it.
 
 Name these before a judge finds them.
 
@@ -617,10 +655,10 @@ Name these before a judge finds them.
 
 | Judges read it as "just a rules engine" | Medium | Lead with the unattended loop, `curl` failing inside the sandbox while the pipeline runs, and an override surviving a sandbox rebuild. A wrong code is a penalty, not a typo: determinism is the pitch. |
 | Team size. The brief records 2 to 4 builders and we are 6 | Medium | Confirm with the organizers at check-in, before anyone opens a laptop. Lane 6 asks, lane 2 if it gets to the desk first. |
-| A fee figure quoted on camera is wrong | Medium | MPF min (`32.71`) and max (`634.62`) in `engine/data/surcharges.json` are tagged `VERIFY-CBP-FY2026` and CBP resets both each fiscal year. Confirm, or quote the 0.3464% rate and not the clamp. |
+| A fee figure quoted on camera is wrong | Low | FY2026 MPF min ($33.58) and max ($651.50) verified against 90 FR 34665; HMF statutory at 26 USC 4461. Figures roll 2026-10-01 with the FY2027 notice, so re-verify if demoing past September. |
 | **A broker cannot correct their own correction.** `engine/triage.mjs:182` is `if (sim > bestSim)`, so on a similarity tie the FIRST precedent read wins and no later `reclassify` can ever displace it. Reproduced: two precedents for 006 line 1, the second by a different broker, and the engine keeps the first forever. That contradicts `agent/AGENTS.md` and `CLAUDE.md`, which both promise a precedent is superseded by a new `reclassify` | Confirmed | Lane 3, one character: `>` to `>=`. Verified working: newest wins, higher-similarity records still beat lower ones. Lane 5 merges. Until it lands, do not mistype an HTS on stage, there is no undo |
 | Sample 001 still lands `NEEDS_REVIEW` | Known, open | Lane 3. Neither one-liner alone works, both measured: the keyword trim leaves confidence at 0.54, and the 0.5 to 0.35 penalty change is a no-op because `rowIsParts` at `triage.mjs:143` never lets the halving fire. Fix `:143` and `:145` together, then re-sweep all six. Not after freeze. |
-| `pga_flags.json` and `lpco_rules.json` read as fabricated | Low | Demo tables. Say so before a judge asks, together with the other placeholder surface, the `VERIFY-CBP-FY2026` MPF clamp. |
+| `pga_flags.json` and `lpco_rules.json` read as fabricated | Low | Every rule now cites its regulation, verified 2026-08-22. The caveat is coverage (eleven rules, not the full agency tables). Say that before a judge asks. |
 
 ### Non-goals
 

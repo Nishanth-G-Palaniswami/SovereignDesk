@@ -127,12 +127,16 @@ truth for every rate in this repo.**
 - **Entry-level fees are computed on the ENTRY, not per line** (`engine/triage.mjs:265`).
   MPF is clamped to a per-entry minimum and maximum, and folding it into a per-line
   ad-valorem rate silently breaks that clamp on any multi-line entry. HMF is vessel only and
-  keys off the shipment's `mode`. The MPF min and max are reset every fiscal year by CBP and
-  the committed figures are marked `VERIFY-CBP-FY2026`, so do not quote them as fact.
-  `effective_rate` stays duty-only on purpose; fees are reported separately.
-- `pga_flags.json` and `lpco_rules.json` are still demo tables and lane 3 owns them. Together
-  with the `VERIFY-CBP-FY2026` MPF clamp above they are the two placeholder surfaces left in
-  the repo. Say so out loud rather than implying they are authoritative.
+  keys off the shipment's `mode`. The committed MPF min ($33.58) and max ($651.50) are the
+  FY2026 figures, verified against CBP Dec. 25-10 (90 FR 34665) on 2026-08-22 and current
+  through 2026-09-30 only: CBP resets both every fiscal year, and the FY2027 notice published
+  2026-07-31 supersedes them on 2026-10-01. `effective_rate` stays duty-only on purpose; fees
+  are reported separately.
+- `pga_flags.json` and `lpco_rules.json` are no longer placeholder: every rule carries a
+  `source` key citing the regulation it rests on (eCFR, Federal Register, or the agency's own
+  compliance guide), verified 2026-08-22. The engine ignores the `source` key. The honest
+  limit is coverage: eleven rules spanning the six samples, not the full agency tables. Do not
+  edit a rule without updating its citation.
 
 ### precedents.jsonl
 
