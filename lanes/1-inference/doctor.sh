@@ -86,6 +86,14 @@ else
 fi
 
 hr
+echo "[ mongodb, the precedent retrieval index ]"
+if have mongod; then say "mongod" "$(mongod --version 2>/dev/null | head -1)"; else say "mongod" "ABSENT. install the staged arm64 deb, see lanes/1-inference/BOX_SETUP.md"; fi
+MSH="${MONGOSH_BIN:-mongosh}"
+if "$MSH" --version >/dev/null 2>&1; then say "mongosh" "$("$MSH" --version 2>/dev/null | head -1)"; else say "mongosh" "ABSENT (or set MONGOSH_BIN)"; fi
+if (exec 3<>/dev/tcp/127.0.0.1/27017) 2>/dev/null; then exec 3>&- 2>/dev/null; say "port 27017" "open"; else say "port 27017" "closed. mongod is not listening"; fi
+say "MONGO_URI" "${MONGO_URI:-unset (engine runs JSONL-only)}"
+
+hr
 echo "[ nemoclaw sandboxes ]"
 if have nemoclaw; then
   nemoclaw list 2>&1 | head -20 || say "nemoclaw list" "failed"
@@ -105,7 +113,10 @@ if have node; then
   TMP="$(mktemp -d)"
   mkdir -p "$TMP/inbox"
   cp "$ROOT"/engine/samples/shipment_001_clean.json "$TMP/inbox/" 2>/dev/null
-  if (cd "$ROOT" && node engine/process_inbox.mjs --root "$TMP" >/dev/null 2>&1); then
+  # env -u MONGO_URI: this probe uses a throwaway mktemp workspace, and the engine's
+  # count-parity guard would (correctly) refuse a Mongo index that belongs to the real
+  # workspace. The probe answers "does the engine run", not "is the index synced".
+  if (cd "$ROOT" && env -u MONGO_URI node engine/process_inbox.mjs --root "$TMP" >/dev/null 2>&1); then
     say "engine smoke test" "ok, engine runs here"
   else
     say "engine smoke test" "FAILED. run it by hand to see why:"

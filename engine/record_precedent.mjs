@@ -16,6 +16,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+// Inert unless MONGO_URI is set. The JSONL append below stays the source-of-truth write;
+// the MongoDB insert only maintains the derived retrieval index.
+import { mongoEnabled, insertPrecedent } from "./mongo_precedents.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
@@ -72,4 +75,15 @@ const record = {
 fs.mkdirSync(path.dirname(store), { recursive: true });
 fs.appendFileSync(store, JSON.stringify(record) + "\n");
 const total = fs.readFileSync(store, "utf8").split("\n").filter((l) => l.trim()).length;
+// seq = the record's 1-based JSONL line number, so index tie-breaks mirror file order.
+// The sig guard mirrors triage's validity filter, keeping the count-parity guard exact.
+if (mongoEnabled() && record.sig) {
+  try {
+    insertPrecedent(record, total);
+  } catch (e) {
+    console.error(`[precedent] the JSONL audit line WAS appended (total ${total}); the MongoDB index insert failed: ${e.message}`);
+    console.error(`[precedent] reconcile with: node scripts/mongo_sync.mjs --precedents ${store}`);
+    process.exit(4);
+  }
+}
 console.log(JSON.stringify({ recorded: true, hts, description, store, total_precedents: total }, null, 2));

@@ -46,7 +46,7 @@ console and press `m` for the memory A/B.
 
 ## Overview, architecture and the non-negotiables
 
-SovereignDesk is an always-on import-compliance triage agent for U.S. customs brokers, running entirely on one Dell Pro Max with GB10. Shipment JSON lands in a watched folder; a deterministic Node engine classifies HTS, flags PGA requirements, builds the duty and fee stack and lists missing LPCO documents; a local Qwen writes a plain-English memo; a broker approves or reclassifies on a console the box itself serves at 127.0.0.1:7777. Every reclassification appends to a precedent store on the host, so the desk gets better at this importer's goods each time a broker corrects it.
+SovereignDesk is an always-on import-compliance triage agent for U.S. customs brokers, running entirely on one Dell Pro Max with GB10. Shipment JSON lands in a watched folder; a deterministic Node engine classifies HTS, flags PGA requirements, builds the duty and fee stack and lists missing LPCO documents; a local Llama 3.3 70B writes a plain-English memo; a broker approves or reclassifies on a console the box itself serves at 127.0.0.1:7777. Every reclassification appends to a precedent store on the host, so the desk gets better at this importer's goods each time a broker corrects it.
 
 **The problem.** An entry clerk hand-triages every shipment: classify each line, check agency flags, chase documents, estimate duty, escalate anything odd. Those documents carry supplier pricing and customer lists that brokers are contractually barred from sending to third-party SaaS, so cloud LLMs are out before the technical conversation starts. Local is the product, not a constraint: the box is the compliance boundary, and the answer to "where does our data go" is "nowhere".
 
@@ -95,7 +95,7 @@ SovereignDesk is an always-on import-compliance triage agent for U.S. customs br
 | Sandbox | OpenShell, policy DROP, FS scoped to the share mount | narrow the FS scope; DROP is never what gets relaxed |
 | Agent | OpenClaw cron, 2 minute tick | `node engine/process_inbox.mjs --root <ws>` by hand |
 | Engine | Node `.mjs`, zero deps, no `package.json`, no build | none, `bash scripts/smoke.sh` is green today |
-| Memory | `precedents.jsonl`, Jaccard over sorted description tokens; binds only at sim >= 0.90, suggests at 0.55 to 0.90 | none. The 0.75 reading-lamp false positive now suggests instead of binding |
+| Memory | `precedents.jsonl` (append-only truth) + MongoDB Community retrieval index (`MONGO_URI` set; Jaccard in an aggregation, same 0.90 bind / 0.55 suggest bars, byte-identical results) | unset `MONGO_URI`: the JSONL scan is the same math, parity-asserted by `scripts/smoke_mongo.sh` |
 | Review | `node lanes/6-channel-ui/server.mjs --root <ws> [--port 7777]` | `node engine/record_precedent.mjs ...` in a terminal, on camera |
 | Tariff data | `engine/data/usitc/hts_2026_rev_7.json`, 35,496 rows, committed | none, nothing downloads at the venue |
 
@@ -205,7 +205,7 @@ has no such column, so the engine cannot surface it yet.
   `effective_rate` deliberately stays duty-only.
 
 Sample 006 cold: duty $2,362.50 on $6,300, MPF $33.58 (raised to the FY2026 minimum), HMF $7.88,
-total payable $2,403.09.
+total payable $2,403.96.
 
 ### Still placeholder
 
@@ -216,6 +216,49 @@ surface any more, and as of 2026-08-22 both are verified: every PGA rule cites i
 figures from CBP Dec. 25-10. The honest caveat left is coverage, not correctness: eleven rules,
 not the full agency tables. Re-derive from the agencies' published requirements; do not port a table out of a
 previous employer's codebase.
+
+### The MongoDB retrieval index (added 2026-08-22)
+
+There is a $1,000 "Best Use of MongoDB" prize at the venue, and its three criteria are our
+three demo beats: the agent survives its own sandbox (the teardown), retrieval that changes
+behavior (the precedent flip), real business data (the USITC schedule plus broker
+overrides). The one thing it disqualifies is exactly our old store: "if a JSON file would
+do, it doesn't count." So MongoDB Community is now the retrieval layer, and the JSONL is
+what it always was, the audit log.
+
+The division of labor, which is also the answer to every "did you bolt this on" question:
+
+- **`precedents.jsonl` stays the append-only source of truth.** Nothing about its rules
+  changed. The Mongo collections are derived and disposable: `scripts/mongo_sync.mjs`
+  rebuilds the precedent index from the JSONL, `scripts/mongo_load_tariff.mjs` loads all
+  19,856 ten-digit lines of `hts_full.csv` into a tariff collection. Destroy either
+  collection and nothing is lost.
+- **Retrieval runs inside MongoDB** when `MONGO_URI` is set: Jaccard similarity as an
+  aggregation over stored token arrays, sorted similarity desc then seq desc so the newest
+  record wins a tie, same 0.90 bind and 0.55 suggest bars. Results are byte-identical to
+  the JSONL scan; `scripts/smoke_mongo.sh` diffs the full result JSON both ways and fails
+  on any divergence. `precedent_store.index` in the result JSON is the proof retrieval
+  went through the index.
+- **The tariff collection makes the memory open-world.** A broker precedent naming a code
+  outside the 16-row curated subset used to die as `PRECEDENT_UNKNOWN_CODE`; it now
+  resolves against the full schedule (real MFN rate, Section 301 by prefix, fees as ever)
+  and binds or suggests normally. The desk can be taught any code in the 2026 schedule.
+- **Zero npm dependencies survives.** No driver: the engine spawns `mongosh` (a system
+  binary, like node) via `child_process` with an args array. mongod binds 127.0.0.1; the
+  drop policy is untouched; nothing leaves.
+- **Failures are loud, never silent.** Dead mongod, a stale index, or an index belonging
+  to another workspace (a count-parity guard catches both) is a thrown engine error that
+  quarantines the shipment to `inbox/_failed/`. There is no automatic fallback: unsetting
+  `MONGO_URI` is the explicit operator path back to the JSONL scan, and it is byte-identical
+  when taken. `MONGO_DB` namespaces databases (tests use `sovereigndesk_smoke`);
+  `MONGOSH_BIN` points at the real mongosh executable when it is not on PATH.
+- On the box, mongod runs inside the sandbox with `--dbpath` on the host share mount, so
+  the teardown beat gets stronger: the sandbox dies, the memory's data files do not. Full
+  runbook: `lanes/1-inference/BOX_SETUP.md`. The demo runs in Mongo mode.
+
+Gates: `bash scripts/smoke.sh` with `MONGO_URI` unset (unchanged), then
+`bash scripts/smoke_mongo.sh` (23 assertions; prints SKIPPED without a local mongod on a
+laptop, must never print SKIPPED on the box).
 
 ---
 
@@ -318,9 +361,9 @@ stops. Each lane fakes its piece first, then swaps in real parts one at a time.
 share-mounted. Gates every other lane.
 
 **Done:** inside the sandbox `node engine/process_inbox.mjs --root .` prints
-`{precedent_store, shipments}`, `shipments[0]` = `SHP-2026-0822-001` / `NEEDS_REVIEW` /
-`LOW_CONFIDENCE` / 0.54 (correct today, lane 3's open finding), and `precedent_store.path` is the
-mount root.
+`{precedent_store, shipments}`, `shipments[0]` = `SHP-2026-0822-001` / `READY` at 0.77
+(the parts-vs-whole fix landed 2026-08-22; a 0.54 `NEEDS_REVIEW` here means the box is
+running pre-fix code), and `precedent_store.path` is the mount root.
 
 **Never:** hand-roll Docker (aarch64, x86 images will not run, NemoClaw owns container
 lifecycle); put the workspace inside the sandbox filesystem, which kills lane 4's teardown;
@@ -427,9 +470,11 @@ destroyed and the warm result reproduces with nothing re-entered, recorded not j
 memory on from the same input file.
 
 **Never:** rebuild the store (`precedents.jsonl`, append-only, workspace root on the host mount,
-written only by `record_precedent.mjs`); build a vector store, embedding index or database, since
-a model in the retrieval path reopens the hallucination question the architecture closes;
-hand-edit the file, even to reset (point `--root` at a fresh directory); edit `engine/triage.mjs`.
+written only by `record_precedent.mjs`); make MongoDB the source of truth, since the JSONL audit
+log is the truth and the index is derived and disposable (`scripts/mongo_sync.mjs` rebuilds it
+from the JSONL at any time); put a model or an embedding in the retrieval path, since that
+reopens the hallucination question the architecture closes; hand-edit the file, even to reset
+(point `--root` at a fresh directory); edit `engine/triage.mjs`.
 
 **Queue:** reproduce cold and warm; run the eval; confirm the `precedent_store.path` the sweep
 prints resolves to the share mount (read it, do not assume); rehearse and record the teardown.
@@ -659,8 +704,8 @@ Name these before a judge finds them.
 | Judges read it as "just a rules engine" | Medium | Lead with the unattended loop, `curl` failing inside the sandbox while the pipeline runs, and an override surviving a sandbox rebuild. A wrong code is a penalty, not a typo: determinism is the pitch. |
 | Team size. The brief records 2 to 4 builders and we are 6 | Medium | Confirm with the organizers at check-in, before anyone opens a laptop. Lane 6 asks, lane 2 if it gets to the desk first. |
 | A fee figure quoted on camera is wrong | Low | FY2026 MPF min ($33.58) and max ($651.50) verified against 90 FR 34665; HMF statutory at 26 USC 4461. Figures roll 2026-10-01 with the FY2027 notice, so re-verify if demoing past September. |
-| **A broker cannot correct their own correction.** `engine/triage.mjs:182` is `if (sim > bestSim)`, so on a similarity tie the FIRST precedent read wins and no later `reclassify` can ever displace it. Reproduced: two precedents for 006 line 1, the second by a different broker, and the engine keeps the first forever. That contradicts `agent/AGENTS.md` and `CLAUDE.md`, which both promise a precedent is superseded by a new `reclassify` | Confirmed | Lane 3, one character: `>` to `>=`. Verified working: newest wins, higher-similarity records still beat lower ones. Lane 5 merges. Until it lands, do not mistype an HTS on stage, there is no undo |
-| Sample 001 still lands `NEEDS_REVIEW` | Known, open | Lane 3. Neither one-liner alone works, both measured: the keyword trim leaves confidence at 0.54, and the 0.5 to 0.35 penalty change is a no-op because `rowIsParts` at `triage.mjs:143` never lets the halving fire. Fix `:143` and `:145` together, then re-sweep all six. Not after freeze. |
+| **A broker cannot correct their own correction.** On a similarity tie the FIRST precedent read used to win forever, contradicting the "superseded by a new reclassify" promise | RESOLVED 2026-08-22 | `>` is now `>=` in `precedentFor` (branch `4-memory`): the newest record wins a tie, higher-similarity records still beat lower ones. `scripts/smoke_mongo.sh` asserts newest-wins in BOTH retrieval modes; the Mongo index mirrors it with `sort {sim desc, seq desc}` |
+| Sample 001 lands `NEEDS_REVIEW` | RESOLVED 2026-08-22 | Both halves of the parts-vs-whole fix landed (`triage.mjs` heading-path test plus the 0.35 penalty): 001 line 1 is `8413.91.90.96` at 0.77, READY, asserted by `scripts/smoke.sh`. See "Resolved: sample 001" in `CLAUDE.md` for the full story |
 | `pga_flags.json` and `lpco_rules.json` read as fabricated | Low | Every rule now cites its regulation, verified 2026-08-22. The caveat is coverage (eleven rules, not the full agency tables). Say that before a judge asks. |
 
 ### Non-goals
