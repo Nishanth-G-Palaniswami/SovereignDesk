@@ -116,11 +116,96 @@ and `nesoi` stripped, duplicates collapsed. After: **0 duplicate groups, 0 bogus
 
 ---
 
-## 5. Still open
+## 5. Discrimination: with four precedents, all three strategies pick correctly
 
-- `$rankFusion` cannot show its value on the precedent store with **one** precedent in it:
-  fusion ranks, and with N=1 there is nothing to rank. Needs a corpus with confusable
-  precedents, two lamp rulings with different codes.
-- Insert-only RBAC, the "`deleteOne` fails live" immutability demo, needs the container
-  restarted with `--auth`.
-- Change streams replacing the cron poll: the replica set is there, the code is not.
+`ab.mjs` answers "does retrieval fire". With one precedent that is the only question available.
+Three more rulings were recorded through the normal engine path, chosen to be confusable:
+
+```
+reading lamp -> 8513.10.20.00   deliberately NOT the 9405 night-light ruling. This is lane 4's
+                                0.75 false positive; a broker ruling on it separately is the
+                                realistic outcome.
+flashlight   -> 8513.10.20.00   near neighbour of both lamp rulings
+pump casing  -> 8413.91.90.96   unrelated, tests cross-contamination
+```
+
+`node mongo/discriminate.mjs`, 8 probes, correct precedent chosen:
+
+| jaccard | vector | hybrid |
+|---|---|---|
+| 8/8 | 8/8 | 8/8 |
+
+**Read this honestly: vector's advantage is recall, not discrimination.** Once a match fires,
+all three strategies pick the same, correct ruling on this corpus. The case for cosine rests on
+section 1 (2/7 -> 6/7 binding), not on this table. `$rankFusion` does not beat pure vector here
+and should not be claimed to.
+
+---
+
+## 6. The search index lags writes, and says it is READY while it does
+
+The first run of `discriminate.mjs`, immediately after inserting three precedents, scored
+**vector 3/8** and returned the 9405 night-light ruling for a **cast iron pump casing**. That is
+not a retrieval failure. `mongot` had not finished syncing the new documents, so `$vectorSearch`
+was still answering from one document.
+
+Throughout that window the index reported:
+
+```
+text_idx    status=READY  queryable=true
+vector_idx  status=READY  queryable=true
+```
+
+**`queryable: true` does not mean current.** After ~45 seconds the same run scored 8/8.
+
+This is a live-demo hazard, not a curiosity. `reclassify` writes a precedent and the operator
+immediately re-sweeps the shipment; if `mongot` has not caught up, the memo shows the OLD
+classification and the memory looks broken on camera. `doctor.mjs` does not currently detect
+this: it checks `queryable`, which was true the whole time.
+
+Mitigation until a freshness probe exists: after recording a precedent, wait for the retrieval
+to actually return it before re-sweeping. Do not trust the index status.
+
+---
+
+## 7. Append-only is enforced by the database
+
+`node mongo/immutability.mjs`, as a user holding a role with `actions: ["insert","find"]`:
+
+```
+as customsdesk:
+  ALLOWED  find one precedent
+  ALLOWED  insert a new precedent
+  REFUSED  deleteOne   Unauthorized: not authorized on sovereigndesk to execute command { delete: ...
+  REFUSED  updateOne   Unauthorized: not authorized on sovereigndesk to execute command { update: ...
+  REFUSED  drop        Unauthorized: not authorized on sovereigndesk to execute command { drop: ...
+
+PASS: append-only is enforced by the database
+```
+
+This is the answer to "why not just a file". On a JSONL file, append-only is a convention that
+`vim` defeats. Here the server refuses to rewrite history regardless of what the application
+code does, which is the claim a broker actually needs when defending a CBP audit. The script
+exits non-zero unless read and insert succeed AND all three destructive operations fail, so it
+is a test, not a demo script.
+
+Runs on a second instance (`mongo/up_auth.sh`, port 27019) because the image only provisions a
+root user on first init, so enabling auth needs a fresh volume and the 19,856-line collection
+on 27018 should not be rebuilt for a permission check.
+
+**Gotcha:** on atlas-local an anonymous client completes the handshake and can run
+`connectionStatus`, which looks like auth is disabled. It is not. Every real operation returns
+`Unauthorized`. Do not conclude auth is off from a successful connect.
+
+---
+
+## 8. Still open
+
+- **An index-freshness probe.** `doctor.mjs` should poll until a just-written document is
+  actually retrievable, rather than trusting `queryable`. Section 6 is the reason.
+- **Auth on the main instance.** 27018 still runs unauthenticated; the enforcement proof lives
+  on 27019. Moving it means a fresh volume and a 130s reload, so it is a decision, not an
+  oversight.
+- **Change streams replacing the cron poll:** the replica set is there, the code is not.
+- **The bolt and bracket failures** in section 2: retrieval weights material over the article
+  noun. Untried idea, embed the leaf segment alone as a second vector and fuse.
