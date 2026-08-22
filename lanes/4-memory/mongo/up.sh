@@ -25,7 +25,7 @@ if [ -z "${MEMORY_MONGO_URI:-}" ]; then
     echo "starting $NAME on $PORT"
     docker rm -f "$NAME" >/dev/null 2>&1 || true
     docker volume create "$VOLUME" >/dev/null
-    docker run -d --name "$NAME" -p "$PORT:27017" -v "$VOLUME:/data/db" "$IMAGE" >/dev/null
+    docker run -d --restart unless-stopped --name "$NAME" -p "$PORT:27017" -v "$VOLUME:/data/db" "$IMAGE" >/dev/null
     printf "waiting for health"
     for _ in $(seq 1 60); do
       [ "$(docker inspect -f '{{.State.Health.Status}}' "$NAME" 2>/dev/null || echo x)" = healthy ] && break
