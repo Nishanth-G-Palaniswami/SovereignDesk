@@ -43,6 +43,7 @@ function jaccard(a, b) {
   return inter / (A.size + B.size - inter);
 }
 const PRECEDENT_FLOOR = 0.55;
+const PRECEDENT_BIND = 0.90;   // engine/triage.mjs: below this a match SUGGESTS, only >= binds
 const confidenceFor = (sim) => Math.round(Math.min(0.99, 0.75 + sim * 0.2) * 100) / 100;
 
 // ---------------------------------------------------------------- test corpus
@@ -75,9 +76,8 @@ const CASES = [
   { text: "portable lamp, rechargeable", expect: "either", note: "half the tokens gone" },
   { text: "LED lamp", expect: "either", note: "minimal description, the common invoice case" },
 
-  // must not fire
-  // KNOWN OPEN DEFECT, tracked below rather than asserted, because it currently DOES fire.
-  { text: "Portable USB rechargeable LED reading light lamp", expect: "known-fp", note: "a reading lamp is not a ceiling fixture. fires at 0.75 and promotes to READY" },
+  // must not BIND (the two-tier rule exists because of this exact line)
+  { text: "Portable USB rechargeable LED reading light lamp", expect: "suggest", note: "a reading lamp is not a ceiling fixture. 0.75: surfaced to a human, never auto-applied" },
   { text: "Cast iron pump casing for centrifugal liquid pump, without engine", expect: "nofire", note: "unrelated, sample 001" },
   { text: "Frozen peeled shrimp, 16/20 count, 2 kg bags", expect: "nofire", note: "unrelated, sample 002" },
   { text: "USB wall charger, 20W, power adapter", expect: "nofire", note: "shares USB, different heading" },
@@ -96,20 +96,25 @@ const rows = CASES.map((c) => {
   const sig = signature(c.text);
   const sim = sig === recordedSig ? 1 : Math.round(jaccard(sig, recordedSig) * 1000) / 1000;
   const fires = sim >= PRECEDENT_FLOOR;
-  const ok = (c.expect === "either" || c.expect === "known-fp") ? true : (c.expect === "fire") === fires;
-  return { ...c, sig, sim, fires, ok };
+  const binds = sim >= PRECEDENT_BIND;
+  let ok;
+  if (c.expect === "either") ok = true;
+  else if (c.expect === "suggest") ok = fires && !binds;   // must surface, must NOT auto-apply
+  else if (c.expect === "fire") ok = fires;
+  else ok = !fires;
+  return { ...c, sig, sim, fires, binds, ok };
 });
 
 const w = Math.max(...rows.map((r) => r.text.length));
 for (const r of rows) {
-  const mark = r.expect === "known-fp" ? "FP  " : r.expect === "either" ? "·" : r.ok ? "ok  " : "FAIL";
-  const verdict = r.fires ? `fires  conf ${confidenceFor(r.sim)}` : "no fire";
+  const mark = r.expect === "either" ? "·" : r.ok ? "ok  " : "FAIL";
+  const verdict = r.binds ? `BINDS  conf ${confidenceFor(r.sim)}` : r.fires ? "suggests       " : "no fire";
   console.log(`${mark} ${String(r.sim).padEnd(5)} ${verdict.padEnd(16)} ${r.text.padEnd(w)}  ${r.note}`);
   if (VERBOSE) console.log(`      sig: ${r.sig}`);
 }
 
 const failures = rows.filter((r) => !r.ok);
-const borderline = rows.filter((r) => r.expect === "either" || r.expect === "known-fp");
+const borderline = rows.filter((r) => r.expect === "either");
 
 console.log(`\n${rows.length - borderline.length} asserted cases, ${failures.length} failed, ${borderline.length} borderline (never fail the run)`);
 
@@ -131,32 +136,21 @@ if (nearMiss) {
   console.log(`  it is the worst case in THIS corpus, not the worst case that exists.`);
 }
 
-// ---------------------------------------------------------------- known false positives
+// ---------------------------------------------------------------- the two-tier guarantee
 //
-// A precedent that fires on a DIFFERENT product is worse than one that fails to fire: the
-// engine promotes the line to READY and nobody reviews it. Baseline is 1. If this number
-// grows, a change made retrieval looser and the run fails, even though the baseline case
-// is still open.
-const KNOWN_FP_BASELINE = 1;
-const fps = rows.filter((r) => r.expect === "known-fp" && r.fires);
-console.log(`
-KNOWN FALSE POSITIVES: ${fps.length} (baseline ${KNOWN_FP_BASELINE})`);
-for (const f of fps) {
-  console.log(`  ${f.sim} "${f.text}"`);
-  console.log(`     fires, so the line is promoted to confidence ${confidenceFor(f.sim)} and READY with no human review.`);
-  console.log(`     the precedent's own reason says "not a self contained portable lamp", which contradicts this line.`);
-}
-if (fps.length) {
-  console.log("  OPEN. Lowering PRECEDENT_FLOOR makes this worse, so do not lower it on the");
-  console.log("  strength of the paraphrase margin alone. Candidate fix for lane 3: only auto-promote");
-  console.log("  on a near-exact match and present anything fuzzier as a suggestion that still needs a");
-  console.log("  human. Sample 006 matches at 1.00, so the demo beat survives that change.");
-}
-if (fps.length > KNOWN_FP_BASELINE) {
+// The reading-lamp case is why PRECEDENT_BIND exists: at 0.75 it used to be silently
+// promoted to READY against the precedent's own reason. It must now surface as a
+// suggestion and never bind. If any "suggest" or "nofire" case ever reaches BIND, a
+// change loosened auto-apply and this run fails.
+const wrongBinds = rows.filter((r) => (r.expect === "suggest" || r.expect === "nofire") && r.binds);
+if (wrongBinds.length) {
   console.log(`
-FAILED: false positives grew from ${KNOWN_FP_BASELINE} to ${fps.length}.`);
+FAILED: ${wrongBinds.length} case(s) reached the ${PRECEDENT_BIND} bind bar that must not:`);
+  for (const f of wrongBinds) console.log(`  ${f.sim} "${f.text}"`);
   process.exit(1);
 }
+console.log(`
+two-tier rule holds: nothing below ${PRECEDENT_BIND} auto-applies; the 0.75 reading-lamp case suggests only.`);
 
 if (failures.length) {
   console.log("\nfailed cases:");

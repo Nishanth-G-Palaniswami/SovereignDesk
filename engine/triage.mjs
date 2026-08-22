@@ -177,7 +177,13 @@ function jaccard(a, b) {
   let inter = 0; for (const t of A) if (B.has(t)) inter++;
   return inter / (A.size + B.size - inter);
 }
-const PRECEDENT_FLOOR = 0.55;   // similarity needed to treat a past override as binding here
+const PRECEDENT_FLOOR = 0.55;   // below this a past override is not even mentioned
+// Only a near-exact match BINDS. A measured false positive forced this split: "Portable USB
+// rechargeable LED reading light lamp" matched the night-light precedent at 0.75 and was
+// silently promoted to READY at 0.90 confidence, against the precedent's own stated reason
+// ("not a self contained portable lamp"). Between the floor and this bar the precedent is
+// SUGGESTED: surfaced with its reason, routed to a human, never applied on its own.
+const PRECEDENT_BIND = 0.90;
 function precedentFor(description) {
   const sig = signature(description);
   let best = null, bestSim = 0;
@@ -358,7 +364,11 @@ for (const line of shipment.lines) {
   let precedentApplied = null;
   if (precedent) {
     const coldHts = chosen, coldConf = cls.confidence;
-    if (findRow(precedent.hts)) {
+    if (!findRow(precedent.hts)) {
+      flags.push("PRECEDENT_UNKNOWN_CODE"); needsHuman = true;
+      trace.push(`L${n}: precedent ${precedent.hts} not in local HTS subset, escalating`);
+    } else if (precedent.similarity >= PRECEDENT_BIND) {
+      // Near-exact: the broker has effectively already ruled on this line. Apply it.
       chosen = precedent.hts;
       cls.confidence = Math.max(cls.confidence, Math.round(Math.min(0.99, 0.75 + precedent.similarity * 0.2) * 100) / 100);
       cls.candidates = [
@@ -366,16 +376,27 @@ for (const line of shipment.lines) {
         ...cls.candidates.filter((c) => c.hts !== precedent.hts),
       ];
       precedentApplied = {
+        applied: true,
         hts: precedent.hts, reason: precedent.reason || "", by: precedent.by || "broker", at: precedent.at || "",
         source_shipment: precedent.shipment_id || "", similarity: precedent.similarity,
         cold_hts: coldHts, cold_confidence: coldConf,
         changed_outcome: coldHts !== precedent.hts,
       };
       flags.push("PRECEDENT_APPLIED");
-      trace.push(`L${n}: PRECEDENT sim=${precedent.similarity} -> ${precedent.hts} (${precedent.by || "broker"}${precedent.shipment_id ? " on " + precedent.shipment_id : ""}${precedent.reason ? ": " + precedent.reason : ""}); cold engine said ${coldHts || "none"} conf=${coldConf}`);
+      trace.push(`L${n}: PRECEDENT sim=${precedent.similarity} >= ${PRECEDENT_BIND}, BINDS -> ${precedent.hts} (${precedent.by || "broker"}${precedent.shipment_id ? " on " + precedent.shipment_id : ""}${precedent.reason ? ": " + precedent.reason : ""}); cold engine said ${coldHts || "none"} conf=${coldConf}`);
     } else {
-      flags.push("PRECEDENT_UNKNOWN_CODE"); needsHuman = true;
-      trace.push(`L${n}: precedent ${precedent.hts} not in local HTS subset, escalating`);
+      // Fuzzy: a similar (not same) line was overridden once. Say so, and make a human
+      // decide. Never rewrite the code or the confidence on a fuzzy match: that is how a
+      // reading lamp inherited a ceiling-fixture ruling that says "not portable".
+      precedentApplied = {
+        applied: false,
+        hts: precedent.hts, reason: precedent.reason || "", by: precedent.by || "broker", at: precedent.at || "",
+        source_shipment: precedent.shipment_id || "", similarity: precedent.similarity,
+        cold_hts: coldHts, cold_confidence: coldConf,
+        changed_outcome: false,
+      };
+      flags.push("PRECEDENT_SUGGESTED"); needsHuman = true;
+      trace.push(`L${n}: precedent sim=${precedent.similarity} < ${PRECEDENT_BIND}, SUGGESTED only -> ${precedent.hts}; engine keeps ${coldHts || "none"} conf=${coldConf}, human decides`);
     }
   }
 

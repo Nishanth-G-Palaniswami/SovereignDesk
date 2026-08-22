@@ -95,7 +95,7 @@ SovereignDesk is an always-on import-compliance triage agent for U.S. customs br
 | Sandbox | OpenShell, policy DROP, FS scoped to the share mount | narrow the FS scope; DROP is never what gets relaxed |
 | Agent | OpenClaw cron, 2 minute tick | `node engine/process_inbox.mjs --root <ws>` by hand |
 | Engine | Node `.mjs`, zero deps, no `package.json`, no build | none, `bash scripts/smoke.sh` is green today |
-| Memory | `precedents.jsonl`, Jaccard over sorted description tokens | none. Do NOT lower `PRECEDENT_FLOOR` (`engine/triage.mjs:176`): a different product already matches at 0.75 |
+| Memory | `precedents.jsonl`, Jaccard over sorted description tokens; binds only at sim >= 0.90, suggests at 0.55 to 0.90 | none. The 0.75 reading-lamp false positive now suggests instead of binding |
 | Review | `node lanes/6-channel-ui/server.mjs --root <ws> [--port 7777]` | `node engine/record_precedent.mjs ...` in a terminal, on camera |
 | Tariff data | `engine/data/usitc/hts_2026_rev_7.json`, 35,496 rows, committed | none, nothing downloads at the venue |
 
@@ -432,24 +432,26 @@ curl -s -X POST 127.0.0.1:7777/api/replay -H 'content-type: application/json' \
   -d '{"shipment_id":"SHP-2026-0822-006","memory":false}'
 ```
 
-**Say the weakness first, and say it accurately.** The floor is wrong in both directions and the
-measured numbers do not point one way:
+**The two-tier rule, shipped 2026-08-22 and the story to tell about it.** Retrieval used to
+have one threshold, and a measured false positive broke it: "Portable USB rechargeable LED
+reading light lamp" matched the night-light precedent at **0.75** and was silently promoted to
+`9405.11.60.10` / 0.90 / `READY`, against the precedent's own reason ("not a self contained
+portable lamp"). The engine now has two bars (`triage.mjs`): at or above `PRECEDENT_BIND = 0.90`
+a precedent binds exactly as before; between `PRECEDENT_FLOOR = 0.55` and the bar it is
+**suggested**: flag `PRECEDENT_SUGGESTED`, `precedent.applied = false`, the broker's reason
+shown, `needs_human` forced true, and the cold classification left untouched. The demo beat
+survives because sample 006 matches at 1.00 and still binds. `eval_retrieval.mjs` fails the run
+if anything below 0.90 ever binds again.
 
-- Too tight for paraphrase: the tightest passing case clears 0.55 by 0.006, and "LED lamp", the
-  terse description real invoices are full of, scores 0.286 and does not fire.
-- Already too loose for a neighbouring product: "Portable USB rechargeable LED reading light
-  lamp" matches the night-light precedent at **0.75** and the engine promotes that line from cold
-  `8513.10.20.00` / 0.54 / `LOW_CONFIDENCE` to `9405.11.60.10` / 0.90 / `READY` with nobody
-  looking. Reproduced on the shipped config.
-
-**Do not recommend dropping the floor to 0.40.** That number comes from the harness's "headroom"
-line, which measures the nearest unrelated probe that does not fire (0.20), not the worst false
-positive that does. The recommendation to lane 3 is: leave the floor at 0.55 for the demo and
-surface `precedent.similarity` in the memo and on the console, so a fuzzy match is disclosed
-rather than hidden. Raising the floor instead breaks a case `eval_retrieval.mjs` asserts.
+Known remaining limits, say them before a judge finds them: the tightest binding paraphrase is
+word-order-only (signature equality); a reworded same-product line at 0.55 to 0.90 now takes one
+extra human click instead of auto-applying, which is the safe side of the trade; and "LED lamp",
+the terse description real invoices are full of, scores 0.286 and never surfaces at all. The
+long-term fix is a better retriever (embeddings), not threshold tuning.
 
 **Hands over:** the A/B endpoint and its numbers to lane 6; the teardown recording to lane 2;
-the floor recommendation to lane 3.
+the `PRECEDENT_SUGGESTED` card treatment (show the suggestion and the reason, ask for a
+decision) to lane 6.
 
 ### Lane 5, orchestration and merge authority
 

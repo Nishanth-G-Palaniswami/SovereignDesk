@@ -62,11 +62,13 @@ This is the answer to every hallucination question a judge asks. Do not weaken i
 Classification is keyword scoring over `engine/data/hts_subset.csv`.
 `confidence = topScore / (topScore + secondScore)`. `CONFIDENCE_FLOOR` is `0.70`
 (`engine/triage.mjs:27`); below that the line gets `LOW_CONFIDENCE` and routes to a human.
-`PRECEDENT_FLOOR` is `0.55` (`engine/triage.mjs:176`).
+`PRECEDENT_FLOOR` is `0.55` and `PRECEDENT_BIND` is `0.90` (`engine/triage.mjs`): a precedent
+binds only at similarity >= 0.90; between the floor and the bar it is surfaced as
+`PRECEDENT_SUGGESTED` with `needs_human` forced true and the cold classification kept.
 
 `shipment_summary.status` is `READY` or `NEEDS_REVIEW`. Flags include `LOW_CONFIDENCE`,
 `LPCO_MISSING`, `PGA_CONFIRM`, `DECLARED_DIFFERS`, `PRECEDENT_APPLIED`,
-`PRECEDENT_UNKNOWN_CODE`, `DECLARED_NOT_IN_TABLE`, `NO_CANDIDATE`.
+`PRECEDENT_SUGGESTED`, `PRECEDENT_UNKNOWN_CODE`, `DECLARED_NOT_IN_TABLE`, `NO_CANDIDATE`.
 
 ## Commands
 
