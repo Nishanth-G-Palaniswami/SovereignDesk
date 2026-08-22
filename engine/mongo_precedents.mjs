@@ -130,3 +130,88 @@ export function tariffLookup(hts) {
   tariffCache.set(digits, doc);
   return doc;
 }
+
+// ---------- hybrid retrieval (opt-in: MEMORY_RETRIEVAL=hybrid) ----------
+// Jaccard-in-an-aggregation is the same match a JSONL scan makes, just executed in the
+// database. Measured on lane 4's corpus it binds 2 of 7 true paraphrases; cosine over local
+// embeddings binds 6 of 7 with no loss of precision, and "LED lamp" goes from 0.286 (never
+// fires) to 0.767 (surfaced). See lanes/4-memory/mongo/FINDINGS.md.
+//
+// Still zero npm dependencies: the embedding is one fetch() to a LOCAL Ollama (never Voyage
+// AI, which is MongoDB-hosted and would break the zero-egress guarantee), and the 768-float
+// query vector rides into mongosh through file mode, not argv.
+//
+// Off by default. MEMORY_RETRIEVAL unset => byte-identical to the Jaccard path above.
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const EMBED_MODEL = process.env.EMBED_MODEL || "nomic-embed-text";
+const OLLAMA = process.env.OLLAMA_HOST || "http://127.0.0.1:11434";
+
+export function hybridEnabled() { return (process.env.MEMORY_RETRIEVAL || "").toLowerCase() === "hybrid"; }
+
+// Synchronous on purpose: triage.mjs is sync top to bottom, so the vector is fetched by
+// spawning engine/embed_once.mjs with execFileSync, the same shape as the mongosh calls.
+function embedText(text) {
+  const helper = path.join(path.dirname(fileURLToPath(import.meta.url)), "embed_once.mjs");
+  let out;
+  try {
+    out = execFileSync(process.execPath, [helper, text], {
+      encoding: "utf8", timeout: EVAL_TIMEOUT_MS, stdio: ["ignore", "pipe", "pipe"], maxBuffer: 4 * 1024 * 1024,
+    });
+  } catch (e) {
+    const detail = e.killed ? `embedding timed out after ${EVAL_TIMEOUT_MS}ms`
+      : (e.stderr ? String(e.stderr).trim().slice(0, 300) : e.message);
+    throw new Error(`[mongo] embedding failed via ${OLLAMA} (model ${EMBED_MODEL}): ${detail}. MEMORY_RETRIEVAL=hybrid is set, there is no fallback; fix Ollama or unset it.`);
+  }
+  const v = JSON.parse(out);
+  if (!Array.isArray(v)) throw new Error(`[mongo] ollama returned no embedding for "${text.slice(0, 40)}"`);
+  return v;
+}
+
+// Cosine sits in a higher, narrower band than Jaccard: the calibrated bars are floor 0.75 and
+// bind 0.90, against the engine's 0.55 and 0.90. Rather than change the engine's constants
+// (lane 3 owns them) map cosine onto the engine's scale, knot for knot, so PRECEDENT_FLOOR and
+// PRECEDENT_BIND keep their exact meaning and the two-tier rule is untouched.
+//   cosine 0.75 -> 0.55 (floor)      cosine 0.90 -> 0.90 (bind)
+export function cosineToEngineScale(c) {
+  const knots = [[0, 0], [0.75, 0.55], [0.90, 0.90], [1, 1]];
+  for (let i = 1; i < knots.length; i++) {
+    const [x0, y0] = knots[i - 1], [x1, y1] = knots[i];
+    if (c <= x1) return y0 + ((c - x0) / (x1 - x0)) * (y1 - y0);
+  }
+  return 1;
+}
+
+export function hybridMatch(description, floor, expectedCount) {
+  const qv = embedText(description);
+  const tmp = path.join(os.tmpdir(), `sd-hybrid-${process.pid}-${Math.random().toString(36).slice(2)}.js`);
+  const script = [
+    `const qv = ${JSON.stringify(qv)};`,
+    `const col = db.getSiblingDB(${JSON.stringify(dbName())}).${PRECEDENTS_COLL};`,
+    `const count = col.countDocuments();`,
+    `const top = col.aggregate([`,
+    `  { $vectorSearch: { index: "vector_idx", path: "embedding", queryVector: qv, numCandidates: 200, limit: 1 } },`,
+    `  { $addFields: { __cos: { $subtract: [{ $multiply: [{ $meta: "vectorSearchScore" }, 2] }, 1] } } },`,
+    `  { $project: { _id: 0, embedding: 0, tokens: 0 } },`,
+    `]).toArray();`,
+    `print(JSON.stringify({ count, top }));`,
+  ].join("\n");
+  fs.writeFileSync(tmp, script);
+  try {
+    const { count, top } = runEval(tmp, { file: true });
+    cachedCount = count;
+    if (count !== expectedCount) {
+      throw new Error(`[mongo] index db=${dbName()} has ${count} precedent docs but the JSONL store has ${expectedCount} valid records; rebuild: node scripts/mongo_sync.mjs --precedents <path>`);
+    }
+    if (!top.length) return null;
+    const doc = { ...top[0] };
+    const cos = doc.__cos;
+    delete doc.__cos; delete doc.seq;
+    const sim = cosineToEngineScale(cos);
+    if (sim < floor) return null;
+    return { doc, sim, cosine: Math.round(cos * 1000) / 1000 };
+  } finally { fs.rmSync(tmp, { force: true }); }
+}

@@ -24,7 +24,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 // Inert unless MONGO_URI is set: with it unset the engine's behavior is byte-identical
 // to the JSONL-only path. precedents.jsonl remains the source of truth either way.
-import { mongoEnabled, topMatch, tariffLookup, indexInfo } from "./mongo_precedents.mjs";
+import { mongoEnabled, topMatch, tariffLookup, indexInfo, hybridEnabled, hybridMatch } from "./mongo_precedents.mjs";
 
 const ENGINE_VERSION = "0.1.0";
 const CONFIDENCE_FLOOR = 0.70;     // below this -> needs_human
@@ -196,9 +196,18 @@ function precedentFor(description) {
   if (mongoEnabled()) {
     // Retrieval runs through the MongoDB index (Jaccard in an aggregation, sort mirrors
     // the >= scan below). PRECEDENTS stays loaded: its count is the staleness guard.
-    const hit = topMatch(sig.split(" ").filter(Boolean), PRECEDENT_FLOOR, PRECEDENTS.length);
+    // MEMORY_RETRIEVAL=hybrid swaps the token overlap for cosine over local embeddings,
+    // mapped onto this engine's scale so PRECEDENT_FLOOR/PRECEDENT_BIND keep their meaning.
+    const hit = hybridEnabled()
+      ? hybridMatch(description, PRECEDENT_FLOOR, PRECEDENTS.length)
+      : topMatch(sig.split(" ").filter(Boolean), PRECEDENT_FLOOR, PRECEDENTS.length);
     if (!hit) return null;
-    return { ...hit.doc, similarity: Math.round(hit.sim * 100) / 100, exact: hit.sim === 1 };
+    return {
+      ...hit.doc,
+      similarity: Math.round(hit.sim * 100) / 100,
+      exact: hit.sim === 1,
+      ...(hit.cosine !== undefined ? { cosine: hit.cosine } : {}),
+    };
   }
   let best = null, bestSim = 0;
   for (const p of PRECEDENTS) {
