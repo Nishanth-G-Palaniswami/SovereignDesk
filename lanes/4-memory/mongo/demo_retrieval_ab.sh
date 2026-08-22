@@ -35,8 +35,15 @@ show() {
 
 echo "probe: $(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).lines[0].description)' "$PROBE")"
 echo
-echo "token overlap (JSONL + Jaccard):"
-MONGO_URI= node engine/triage.mjs "$PROBE" --precedents "$STORE" 2>/dev/null | show
+echo "1. a file, token overlap          (MONGO_URI unset)"
+MONGO_URI= node engine/triage.mjs "$PROBE" --precedents "$STORE" 2>&1 | show
 echo
-echo "semantic (MongoDB + \$vectorSearch):"
+echo "2. MongoDB doing the same thing   (Jaccard in an aggregation)"
+node engine/triage.mjs "$PROBE" --precedents "$STORE" 2>&1 | show
+echo
+echo "3. MongoDB doing what a file cannot (\$vectorSearch over local embeddings)"
 MEMORY_RETRIEVAL=hybrid node engine/triage.mjs "$PROBE" --precedents "$STORE" 2>&1 | show
+echo
+echo "1 and 2 agree to the decimal: the index is a faithful copy of the file, which is"
+echo "exactly why moving the same match into a database changes nothing. 3 is the reason"
+echo "to use one."

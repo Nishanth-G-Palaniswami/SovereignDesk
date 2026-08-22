@@ -224,6 +224,22 @@ broker's ruling and the shipment clears.
 are mapped knot-for-knot onto the engine's scale by `cosineToEngineScale`, so the two-tier
 rule keeps its exact meaning.
 
+All three retrieval paths, same probe, after `scripts/mongo_sync.mjs` + `mongo_embed_precedents.mjs`:
+
+```
+1. a file, token overlap             NEEDS_REVIEW  conf 0.62  sim 0.86
+2. MongoDB, Jaccard aggregation      NEEDS_REVIEW  conf 0.62  sim 0.86
+3. MongoDB, $vectorSearch            READY         conf 0.94  sim 0.93
+```
+
+**1 and 2 agree to the decimal.** That is a good result for the sync: the index is a faithful
+copy of the file, exactly as `mongo_precedents.mjs` promises. It is also the whole argument.
+Moving the same match into a database changes nothing a judge can see. Only 3 does.
+
+Note `scripts/mongo_sync.mjs` **drops the collection**, so it destroys the embeddings and the
+vector index. Always follow it with `scripts/mongo_embed_precedents.mjs`, then wait for
+`vector_idx` before demoing.
+
 ---
 
 ## 9. Still open
