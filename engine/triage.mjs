@@ -22,6 +22,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+// Inert unless MONGO_URI is set: with it unset the engine's behavior is byte-identical
+// to the JSONL-only path. precedents.jsonl remains the source of truth either way.
+import { mongoEnabled, topMatch, tariffLookup, indexInfo } from "./mongo_precedents.mjs";
 
 const ENGINE_VERSION = "0.1.0";
 const CONFIDENCE_FLOOR = 0.70;     // below this -> needs_human
@@ -165,7 +168,11 @@ function classify(description) {
     confidence,
   };
 }
-function findRow(hts) { return HTS.find((r) => r.hts === hts) || null; }
+// Rows resolved at runtime from the MongoDB tariff index (full 19,856-line schedule).
+// Only the precedent unknown-code path populates this; keywords stay empty so these rows
+// can never influence classify() scoring.
+const MONGO_ROWS = new Map();
+function findRow(hts) { return HTS.find((r) => r.hts === hts) || MONGO_ROWS.get(hts) || null; }
 
 // ---------- Precedent matching ----------
 // Signature = sorted unique content tokens of the line description. Order-independent, so
@@ -186,6 +193,13 @@ const PRECEDENT_FLOOR = 0.55;   // below this a past override is not even mentio
 const PRECEDENT_BIND = 0.90;
 function precedentFor(description) {
   const sig = signature(description);
+  if (mongoEnabled()) {
+    // Retrieval runs through the MongoDB index (Jaccard in an aggregation, sort mirrors
+    // the >= scan below). PRECEDENTS stays loaded: its count is the staleness guard.
+    const hit = topMatch(sig.split(" ").filter(Boolean), PRECEDENT_FLOOR, PRECEDENTS.length);
+    if (!hit) return null;
+    return { ...hit.doc, similarity: Math.round(hit.sim * 100) / 100, exact: hit.sim === 1 };
+  }
   let best = null, bestSim = 0;
   for (const p of PRECEDENTS) {
     const sim = p.sig === sig ? 1 : jaccard(sig, p.sig);
@@ -374,6 +388,20 @@ for (const line of shipment.lines) {
   let precedentApplied = null;
   if (precedent) {
     const coldHts = chosen, coldConf = cls.confidence;
+    if (!findRow(precedent.hts) && mongoEnabled()) {
+      // The code may be real but outside the 16-row curated subset. Resolve it from the
+      // full 19,856-line schedule in the tariff index; the row slots in shaped exactly
+      // like a subset row, so bind/suggest, candidates and dutyFor() run unmodified.
+      const full = tariffLookup(precedent.hts);
+      if (full) {
+        MONGO_ROWS.set(precedent.hts, {
+          hts: precedent.hts, description: full.description || "",
+          mfn_rate: Number(full.mfn_rate) || 0, unit: full.unit || "", keywords: [],
+          source: `USITC hts_2026_rev_7.json general="${full.rate_text || ""}", via MongoDB tariff index`,
+        });
+        trace.push(`L${n}: precedent ${precedent.hts} not in subset; resolved from the full schedule via the MongoDB tariff index (MFN ${Number(full.mfn_rate) || 0})`);
+      }
+    }
     if (!findRow(precedent.hts)) {
       flags.push("PRECEDENT_UNKNOWN_CODE"); needsHuman = true;
       trace.push(`L${n}: precedent ${precedent.hts} not in local HTS subset, escalating`);
@@ -461,7 +489,9 @@ const status = results.some((r) => r.needs_human) ? "NEEDS_REVIEW" : "READY";
 const result = {
   engine_version: ENGINE_VERSION,
   generated_at: new Date().toISOString(),
-  precedent_store: { path: precedentsPath, entries: PRECEDENTS.length },
+  // `index` appears only when retrieval actually ran through MongoDB: it is the in-JSON
+  // evidence of the index, additive to the frozen shape (nothing renamed or removed).
+  precedent_store: { path: precedentsPath, entries: PRECEDENTS.length, ...(indexInfo() ? { index: indexInfo() } : {}) },
   shipment_id: shipment.shipment_id,
   importer: shipment.importer, supplier: shipment.supplier, origin_country: origin,
   incoterm: shipment.incoterm, mode: shipment.mode || null, currency: shipment.currency || "USD",
@@ -476,7 +506,7 @@ const result = {
     estimated_total_payable: round2(dutyTotal + feeTotal),
     flags: shipmentFlags,
     lines_needing_human: results.filter((r) => r.needs_human).map((r) => r.line),
-    precedents_applied: results.filter((r) => r.precedent).map((r) => ({ line: r.line, hts: r.precedent.hts, changed_outcome: r.precedent.changed_outcome, similarity: r.precedent.similarity })),
+    precedents_applied: results.filter((r) => r.precedent).map((r) => ({ line: r.line, hts: r.precedent.hts, applied: r.precedent.applied, changed_outcome: r.precedent.changed_outcome, similarity: r.precedent.similarity })),
     missing_documents: [...new Set(results.flatMap((r) => r.lpco.filter((d) => d.status === "MISSING").map((d) => d.doc)))],
   },
   trace,

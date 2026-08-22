@@ -135,13 +135,20 @@ function readBody(req) {
   });
 }
 
-const runNode = (args, cwd = REPO) =>
+const runNode = (args, cwd = REPO, env = undefined) =>
   new Promise((resolve, reject) => {
-    execFile(process.execPath, args, { cwd, timeout: 120000 }, (err, stdout, stderr) => {
+    execFile(process.execPath, args, { cwd, timeout: 120000, ...(env ? { env } : {}) }, (err, stdout, stderr) => {
       if (err) return reject(new Error(stderr || err.message));
       resolve({ stdout, stderr });
     });
   });
+
+// Child env without MONGO_URI. The replay memory-off run must disable BOTH retrieval
+// paths: the empty temp JSONL kills the file scan, this kills the MongoDB index.
+// execFile's env option replaces the environment entirely, and Windows env keys are
+// case-insensitive, so filter rather than delete-by-name.
+const envWithoutMongo = () =>
+  Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^MONGO_URI$/i.test(k)));
 
 // ---------------------------------------------------------------- routes
 
@@ -264,7 +271,7 @@ const server = http.createServer(async (req, res) => {
       } else {
         args.push("--precedents", path.join(ROOT, "precedents.jsonl"));
       }
-      const { stdout } = await runNode(args);
+      const { stdout } = await runNode(args, REPO, withMemory ? undefined : envWithoutMongo());
       return send(res, 200, { memory: withMemory, result: JSON.parse(stdout) });
     }
 
