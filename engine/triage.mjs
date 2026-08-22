@@ -242,8 +242,16 @@ function dutyFor(hts, origin, enteredValue, trace, lineNo) {
     const hit = prefixMatches(hts, s301.rates_by_prefix)[0];
     if (hit !== undefined) {
       const rate = s301.rates_by_prefix[hit];
-      if (rate > 0) surcharges.push({ name: "Section 301", rate, basis: `prefix ${hit}, origin ${origin}` });
-      trace.push(`L${lineNo}: Section 301 lookup prefix=${hit} origin=${origin} rate=${rate}`);
+      // authority_by_prefix carries the Chapter 99 heading whose own text states this
+      // surcharge. Emit it so the memo can answer "where did 25% come from?" with a
+      // tariff heading instead of a config file.
+      const authority = (s301.authority_by_prefix || {})[hit] || "";
+      if (rate > 0) surcharges.push({
+        name: "Section 301", rate,
+        basis: `prefix ${hit}, origin ${origin}${authority ? `, per heading ${authority}` : ""}`,
+        ...(authority ? { authority } : {}),
+      });
+      trace.push(`L${lineNo}: Section 301 lookup prefix=${hit} origin=${origin} rate=${rate}${authority ? ` authority=${authority}` : ""}`);
     }
   }
   const s122 = SUR.section_122;
