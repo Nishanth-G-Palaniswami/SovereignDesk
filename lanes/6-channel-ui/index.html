@@ -249,11 +249,21 @@ function renderMemory() {
   const key = SELECTED.shipment_id + ":" + applied.map((l) => l.precedent.hts).join(",");
   $("memory").innerHTML = applied.map((l) => {
     const p = l.precedent;
-    return `<div class="precedent">
-      <div class="lead">precedent applied &middot; line ${l.line} &middot; similarity ${p.similarity}</div>
-      <div style="margin-top:8px"><b>${esc(p.hts)}</b> <span class="muted">set by ${esc(p.by)} on ${esc(p.source_shipment || "?")}</span></div>
+    // Two-tier rule: p.applied false means the match was fuzzy (0.55 to 0.90), the engine
+    // kept its own classification, and a human decides. Never render that as "applied".
+    const bound = p.applied !== false;
+    const lead = bound
+      ? `precedent applied &middot; line ${l.line} &middot; similarity ${p.similarity}`
+      : `similar case, NOT applied &middot; line ${l.line} &middot; similarity ${p.similarity}`;
+    const border = bound ? "" : "border-style:dashed;";
+    const tail = bound
+      ? (p.cold_hts ? `<div class="muted" style="margin-top:10px">cold engine would have said <b>${esc(p.cold_hts)}</b> at confidence ${p.cold_confidence}</div>` : "")
+      : `<div class="muted" style="margin-top:10px">engine kept <b>${esc(l.hts)}</b> at confidence ${l.confidence}. confirm or reclassify.</div>`;
+    return `<div class="precedent" style="${border}">
+      <div class="lead">${lead}</div>
+      <div style="margin-top:8px"><b>${esc(p.hts)}</b> <span class="muted">${bound ? "set" : "chosen"} by ${esc(p.by)} on ${esc(p.source_shipment || "?")}</span></div>
       <div style="margin-top:8px">"${esc(p.reason)}"</div>
-      ${p.cold_hts ? `<div class="muted" style="margin-top:10px">cold engine would have said <b>${esc(p.cold_hts)}</b> at confidence ${p.cold_confidence}</div>` : ""}
+      ${tail}
     </div>`;
   }).join("");
   if (key !== LAST_PRECEDENT_KEY) {

@@ -53,8 +53,10 @@ Line <n>: <short description>
   HTS <hts> (conf <confidence>) · MFN + <surcharges> = <total_rate as %>
   PGA: <agency requirement -> status> | none
   Flags: <flags> | none
-  [if precedent and changed_outcome] 🧠 Precedent: <by> set this to <hts> on <source_shipment>, "<reason>".
-      Cold engine would have said <cold_hts>. Applied automatically.
+  [if precedent.applied and changed_outcome] 🧠 Precedent: <by> set this to <hts> on <source_shipment>, "<reason>".
+      Cold engine would have said <cold_hts>. Applied automatically (similarity <similarity>).
+  [if precedent and not precedent.applied] 🤔 Similar case on file, NOT applied (similarity <similarity>):
+      <by> chose <precedent.hts> on <source_shipment>, "<reason>". Engine kept <hts>. Confirm or reclassify.
   [if declared_check] Declared <declared> vs engine <engine> → duty delta $<duty_delta>. Audit-risk: confirm basis.
 
 Missing documents: <list> | none
