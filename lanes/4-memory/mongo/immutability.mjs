@@ -29,7 +29,11 @@ if (!URI || !RP || !DESK_PASS) {
   console.error("usage: node mongo/immutability.mjs --uri <uri> --root-pass <pw> --desk-pass <pw>");
   process.exit(2);
 }
-const withCreds = (uri, u, p) => uri.replace("mongodb://", `mongodb://${encodeURIComponent(u)}:${encodeURIComponent(p)}@`);
+// authSource=admin is required: both users live in admin, and without it the driver
+// authenticates against the default db and fails with AuthenticationFailed.
+const withCreds = (uri, u, p) =>
+  uri.replace("mongodb://", `mongodb://${encodeURIComponent(u)}:${encodeURIComponent(p)}@`) +
+  (uri.includes("authSource=") ? "" : (uri.includes("?") ? "&" : "?") + "authSource=admin");
 
 // ---- 1. as root: define a role that can only append ----
 {
@@ -47,7 +51,9 @@ const withCreds = (uri, u, p) => uri.replace("mongodb://", `mongodb://${encodeUR
     }],
     roles: [{ role: "read", db: DB }],
   });
-  await admin.command({ createUser: DESK_USER, pwd: DESK_PASS, roles: [{ role: "precedentAppender", db: DB }] });
+  // create the desk user in admin so one authSource covers both
+  await c.db("admin").command({ dropUser: DESK_USER }).catch(() => {});
+  await c.db("admin").command({ createUser: DESK_USER, pwd: DESK_PASS, roles: [{ role: "precedentAppender", db: DB }] });
   console.log(`role precedentAppender created: actions = ["insert","find"]`);
   await c.close();
 }
