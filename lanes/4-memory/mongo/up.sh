@@ -18,14 +18,18 @@ PORT="${MEMORY_PORT:-27018}"
 # on the host, outside the container, and survives `docker rm` and a sandbox rebuild, which is
 # what the teardown demo actually needs. `docker volume inspect` prints its host path.
 VOLUME="${MEMORY_VOLUME:-sovereign-memory-data}"
+# /data/configdb holds the replica-set keyfile the image generates on first run. Persist it
+# too, or recreating the container leaves a volume whose replica set expects a keyfile that
+# no longer exists and mongod dies with "Unable to acquire security key[s]".
+CONFVOL="${MEMORY_CONFIG_VOLUME:-sovereign-memory-config}"
 
 if [ -z "${MEMORY_MONGO_URI:-}" ]; then
   # 8.2.0, not :latest. latest tracks the 8.0 line and $rankFusion needs 8.1+.
   if ! docker ps --format '{{.Names}}' | grep -qx "$NAME"; then
     echo "starting $NAME on $PORT"
     docker rm -f "$NAME" >/dev/null 2>&1 || true
-    docker volume create "$VOLUME" >/dev/null
-    docker run -d --name "$NAME" -p "$PORT:27017" -v "$VOLUME:/data/db" "$IMAGE" >/dev/null
+    docker volume create "$VOLUME" >/dev/null; docker volume create "$CONFVOL" >/dev/null
+    docker run -d --restart unless-stopped --name "$NAME" -p "$PORT:27017" -v "$VOLUME:/data/db" -v "$CONFVOL:/data/configdb" "$IMAGE" >/dev/null
     printf "waiting for health"
     for _ in $(seq 1 60); do
       [ "$(docker inspect -f '{{.State.Health.Status}}' "$NAME" 2>/dev/null || echo x)" = healthy ] && break

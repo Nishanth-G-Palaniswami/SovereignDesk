@@ -16,7 +16,8 @@
  *                  - most specific segment FIRST, so meaning leads
  *                  - bare "Other" segments dropped; they carry no signal and the USITC
  *                    schedule is full of them ("Parts:, Of pumps:, Other, Other")
- *                  - `superior` folded in where the export sets it
+ *                  - `superior` is NOT text: it is a boolean flag encoded as the string
+ *                    "true" (5,912 rows, one distinct value), so it is ignored
  *                  - duplicate segments collapsed
  *
  * This does not touch engine/data/. Lane 3 owns those tables.
@@ -50,8 +51,6 @@ for (const r of rows) {
   const segs = [];
   for (const anc of stack) {
     if (!anc) continue;
-    const sup = clean(anc.superior);
-    if (sup && !segs.includes(sup)) segs.push(sup);
     const d = clean(anc.description);
     if (d && !segs.includes(d)) segs.push(d);
   }
