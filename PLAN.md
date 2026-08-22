@@ -590,6 +590,9 @@ Lane 6 also needs `policy-list` output and the two-terminal screenshot.
   agency tables. Mesh approval (self-hosted Matrix, Bitchat BLE) is a future extension off
   the public internet; `lanes/6-channel-ui/matrix_bridge.mjs` is a spike, not demoed.
 
+Rehearsal version of all of this, written as spoken answers with the numbers card and the
+hand-off map: `docs/QA_CRIB.md`.
+
 **Domain deep answers (lane 3 delivers these; every figure verified against the named source
 on 2026-08-22).**
 
