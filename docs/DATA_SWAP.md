@@ -99,7 +99,7 @@ The engine scores `8413.70.20.05` (a complete centrifugal pump) at 15 and
 `8413.91.90.96` (parts of pumps) at 13 → confidence 0.54 → `LOW_CONFIDENCE`.
 
 **The engine's second choice is the right one.** A casing is a part of a pump, not a pump.
-The parts-vs-whole logic at `engine/triage.mjs:141-144` is already there and firing. The
+The parts-vs-whole logic at `engine/triage.mjs:141-145` is already there and firing. The
 problem is data, not logic: `8413.70.20.05` carries the keywords `liquid pump` and
 `centrifugal pump`, both of which match a line describing a *casing for* a centrifugal
 liquid pump, and the multi-token bonus (+4 each) outruns the halving penalty.
@@ -107,7 +107,7 @@ liquid pump, and the multi-token bonus (+4 each) outruns the halving penalty.
 Two ways to close it, both a one-line change, both needing a full re-sweep afterwards:
 
 1. Trim the greedy keywords on `8413.70.20.05` (drop `liquid pump`, keep `centrifugal pump`).
-2. Strengthen the whole-machine penalty at `engine/triage.mjs:143` from `0.5` to ~`0.35`.
+2. Strengthen the whole-machine penalty at `engine/triage.mjs:145` from `0.5` to about `0.35`.
 
 Option 1 is narrower and cannot affect non-pump lines. Whoever owns the rules engine should
 make this call early, because it changes the first beat of the demo, and it is the difference
@@ -120,3 +120,21 @@ hedged."
 the U.S. International Trade Commission (hts.usitc.gov → Export). Public U.S. government
 data. `hts_full.csv` (19,856 ten-digit lines) is derived from it by the build script, so the
 pitch line "swap in the full USITC schedule" is already true rather than aspirational.
+
+## Added since the swap: entry-level fees
+
+`engine/triage.mjs:265` computes MPF and HMF on the ENTRY, not per line.
+
+- **MPF** 0.3464% of the entry's total entered value, clamped to a per-entry minimum and
+  maximum. Modelled at entry level deliberately: folding it into a per-line ad-valorem rate
+  breaks the clamp on any multi-line entry and silently over-collects. Across the six
+  samples the minimum clamp fires on four of them, so this is not a theoretical concern.
+- **HMF** 0.125% of entered value, vessel shipments only, no minimum or maximum, keyed off
+  the shipment's `mode` field. Not charged on air, truck or rail.
+
+Both are reported as `shipment_summary.fees[]`, `estimated_fees` and
+`estimated_total_payable`. `effective_rate` deliberately stays duty-only.
+
+**The MPF minimum and maximum are reset every fiscal year by CBP.** The committed figures
+are marked `VERIFY-CBP-FY2026` and must be confirmed before anyone quotes a number. The
+0.3464% rate and the 0.125% HMF rate have both been stable for years.

@@ -249,6 +249,61 @@ function dutyFor(hts, origin, enteredValue, trace, lineNo) {
   return { mfn_rate: mfn, surcharges, total_rate: total, duty_est: Math.round(enteredValue * total * 100) / 100, notes };
 }
 
+// ---------- Entry-level fees ----------
+const round2 = (n) => Math.round(n * 100) / 100;
+
+/**
+ * MPF and HMF are charged on the ENTRY, not on the line, so they are computed once from
+ * the shipment's total entered value. This matters: MPF is clamped to an annual minimum
+ * and maximum, and a per-line ad-valorem rate cannot express that clamp. On a five line
+ * entry, folding MPF into each line's rate over-collects against the cap and silently
+ * produces a number a broker would immediately know is wrong.
+ *
+ * Neither fee is part of the duty rate, so effective_rate stays duty-only and these are
+ * reported separately.
+ */
+function feesFor(shipment, enteredTotal, trace) {
+  const cfg = SUR.fees || {};
+  const origin = (shipment.origin_country || "").toUpperCase();
+  const mode = (shipment.mode || "").toLowerCase();
+  const fees = [];
+
+  const mpf = cfg.mpf;
+  if (mpf && mpf.enabled) {
+    if ((mpf.exempt_origins || []).includes(origin)) {
+      trace.push(`fees: MPF treated as exempt for origin ${origin} per config`);
+    } else {
+      const raw = enteredTotal * mpf.rate;
+      const floor = mpf.min_usd ?? 0;
+      const cap = mpf.max_usd ?? Infinity;
+      const amount = Math.min(Math.max(raw, floor), cap);
+      let basis = `${(mpf.rate * 100).toFixed(4)}% of $${round2(enteredTotal)}`;
+      if (amount > raw) basis += `, raised to the $${floor} entry minimum`;
+      else if (amount < raw) basis += `, capped at the $${cap} entry maximum`;
+      fees.push({ name: "MPF", amount: round2(amount), basis, source: mpf.source || "" });
+      trace.push(`fees: MPF computed ${round2(raw)} applied ${round2(amount)} (${basis})`);
+    }
+  }
+
+  const hmf = cfg.hmf;
+  if (hmf && hmf.enabled) {
+    const modes = (hmf.modes || ["ocean"]).map((m) => String(m).toLowerCase());
+    if (modes.includes(mode)) {
+      const amount = round2(enteredTotal * hmf.rate);
+      fees.push({
+        name: "HMF",
+        amount,
+        basis: `${(hmf.rate * 100).toFixed(3)}% of $${round2(enteredTotal)}, mode ${mode}`,
+        source: hmf.source || "",
+      });
+      trace.push(`fees: HMF ${amount} on ${mode} shipment`);
+    } else {
+      trace.push(`fees: HMF not applicable, mode "${mode || "unspecified"}" is not a vessel mode`);
+    }
+  }
+  return fees;
+}
+
 // ---------- LPCO ----------
 function lpcoFor(pga, mode) {
   const docs = new Map();
@@ -364,6 +419,9 @@ for (const line of shipment.lines) {
   for (const f of flags) if (!shipmentFlags.includes(f)) shipmentFlags.push(f);
 }
 
+const entryFees = feesFor(shipment, enteredTotal, trace);
+const feeTotal = entryFees.reduce((a, f) => a + f.amount, 0);
+
 const status = results.some((r) => r.needs_human) ? "NEEDS_REVIEW" : "READY";
 const result = {
   engine_version: ENGINE_VERSION,
@@ -371,20 +429,23 @@ const result = {
   precedent_store: { path: precedentsPath, entries: PRECEDENTS.length },
   shipment_id: shipment.shipment_id,
   importer: shipment.importer, supplier: shipment.supplier, origin_country: origin,
-  incoterm: shipment.incoterm, currency: shipment.currency || "USD",
+  incoterm: shipment.incoterm, mode: shipment.mode || null, currency: shipment.currency || "USD",
   lines: results,
   shipment_summary: {
     status,
     entered_value: Math.round(enteredTotal * 100) / 100,
     estimated_duty: Math.round(dutyTotal * 100) / 100,
     effective_rate: enteredTotal ? Math.round((dutyTotal / enteredTotal) * 10000) / 10000 : 0,
+    fees: entryFees,
+    estimated_fees: round2(feeTotal),
+    estimated_total_payable: round2(dutyTotal + feeTotal),
     flags: shipmentFlags,
     lines_needing_human: results.filter((r) => r.needs_human).map((r) => r.line),
     precedents_applied: results.filter((r) => r.precedent).map((r) => ({ line: r.line, hts: r.precedent.hts, changed_outcome: r.precedent.changed_outcome, similarity: r.precedent.similarity })),
     missing_documents: [...new Set(results.flatMap((r) => r.lpco.filter((d) => d.status === "MISSING").map((d) => d.doc)))],
   },
   trace,
-  disclaimer: "MFN rates and Section 301 surcharges are read from the USITC Harmonized Tariff Schedule export (2026 rev 7); each surcharge cites the Chapter 99 heading that sets it. PGA flags and LPCO rules are still demo tables. The engine proposes; a licensed broker decides. Not legal or customs advice.",
+  disclaimer: "MFN rates and Section 301 surcharges are read from the USITC Harmonized Tariff Schedule export (2026 rev 7); each surcharge cites the Chapter 99 heading that sets it. MPF and HMF are computed on the entry, not per line, but their figures are unverified: the MPF minimum and maximum are reset every fiscal year and must be confirmed on CBP. PGA flags and LPCO rules are still demo tables. The engine proposes; a licensed broker decides. Not legal or customs advice.",
 };
 
 const json = JSON.stringify(result, null, pretty || outPath ? 2 : 0);

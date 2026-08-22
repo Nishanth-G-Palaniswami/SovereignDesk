@@ -51,8 +51,8 @@ cp engine/samples/shipment_006_precedent_test.json $WS/inbox/
 node engine/process_inbox.mjs --root $WS
 ```
 
-That is the **warm** run. If you got both, the memory layer works and you can skip straight to
-section 5.
+That is the **warm** run. If you got both, the memory layer works and you can go straight to the
+work queue in section 6.
 
 ---
 
@@ -85,9 +85,12 @@ requirement whose semantic is `may`, so it resolves to `CONFIRM`, not `REQUIRED`
 
 ## 3. What the store actually is
 
-**Path:** `<workspace root>/precedents.jsonl`. Set in two places, both of which follow `--root`:
-`engine/process_inbox.mjs:33` and the default at `engine/triage.mjs:47`. Never a sandbox-local
-path. `.gitignore` already excludes it, so no broker data reaches the public repo.
+**Path:** `<workspace root>/precedents.jsonl`. `engine/process_inbox.mjs:33` derives it from
+`--root` and passes it to the engine as `--precedents`, so the sweep always follows `--root`.
+Watch out for `engine/triage.mjs:47`: run `triage.mjs` on its own and it does **not** see `--root`,
+it falls back to `<repo>/workspace/precedents.jsonl`, a different file. Always go through
+`process_inbox.mjs`, or pass `--precedents` explicitly. Never a sandbox-local path.
+`.gitignore` already excludes it, so no broker data reaches the public repo.
 
 **One record per broker override**, appended, one line of JSON, written only by
 `engine/record_precedent.mjs:61-73`:
@@ -109,8 +112,8 @@ crude plural stem (`engine/triage.mjs:169`). Sorting is what makes it order inde
 
 **Retrieval** is Jaccard similarity over those token sets, `engine/triage.mjs:170-186`:
 `|A n B| / |A u B|`, best match wins, and `PRECEDENT_FLOOR = 0.55` at `triage.mjs:176` is the
-bar for treating a past override as binding. On a hit, the engine swaps the code, raises
-confidence to `min(0.99, 0.75 + similarity * 0.2)`, adds `PRECEDENT_APPLIED`, and writes a
+bar for treating a past override as binding. On a hit, the engine swaps the code, sets confidence
+to `max(cold_confidence, min(0.99, 0.75 + similarity * 0.2))`, adds `PRECEDENT_APPLIED`, and writes a
 trace line naming who set it and what the cold engine would have said
 (`triage.mjs:300-321`).
 
@@ -138,10 +141,12 @@ You are done when all five hold:
 1. `node engine/process_inbox.mjs --root <ws>` on sample 006 prints `NEEDS_REVIEW` /
    `8513.10.20.00` / `2362.5` cold, and `READY` / `9405.11.60.10` / `2053.8` /
    `PRECEDENT_APPLIED` warm, **on the GB10**, not on your laptop.
-2. `lanes/4-memory/sim_probe.mjs` (section 6) exists and prints a similarity table you can put
-   on screen.
-3. The sandbox has been destroyed with `nemoclaw <sandbox> rebuild` and the warm result
-   reproduces afterwards with zero re-entry of the override.
+2. `node lanes/4-memory/eval_retrieval.mjs` passes 12/12 and exits 0, and
+   `lanes/4-memory/sim_probe.mjs` (section 6) exists and prints a similarity table off the real
+   store that you can put on screen.
+3. The sandbox has been destroyed with `nemoclaw <sandbox> rebuild` (alpha CLI, confirm the verb
+   with `nemoclaw <sandbox> --help` on the day) and the warm result reproduces afterwards with
+   zero re-entry of the override.
 4. That teardown is **recorded**, not just performed.
 5. Lane 2 and lane 5 have your one-paragraph answer for "what happens when the memory is wrong".
 
@@ -168,14 +173,32 @@ You are done when all five hold:
 
 ### T+0 to T+1, while lane 1 fights the box (do this on your laptop)
 
-Nothing here needs the GB10. Get it all done before the box is ready and you will be the first
-lane with results.
+Nothing here needs the GB10. Both heredocs below need bash (Git Bash, WSL, or the box);
+PowerShell will not parse `<<'EOF'`.
 
 **A. Reproduce cold and warm.** Section 1. Confirm the numbers in section 2 match to the cent.
 If they do not, stop and tell lane 3 before doing anything else.
 
-**B. Build the similarity probe.** This is the deliverable that answers "does it survive
-rewording". Paste this whole block:
+**A2. Run the harness that is already in your lane directory.** `lanes/4-memory/eval_retrieval.mjs`
+is committed, it is the rewording regression check, and it exits non-zero on a failure so lane 5
+can wire it into the pre-merge gate. Do not rewrite it.
+
+```bash
+node lanes/4-memory/eval_retrieval.mjs        # --verbose also prints each signature
+```
+
+Measured today: 12 asserted cases, 0 failed, 3 borderline, exit 0. The number to carry into Q&A is
+its last line: **the tightest passing margin above the floor is 0.006.** "USB rechargeable portable
+LED lamp for bedside use" fires at 0.556 against a floor of 0.55. The harness prints its own warning
+about that. So the honest claim is "measured, and here is the margin", not "it generalises".
+
+Two comment errors in that file, neither of which changes a result: its header credits the recorded
+precedent to sample 003, but the string is sample 006's line, and its
+`confidence = min(0.99, 0.75 + score * 0.2)` note omits the `max` against the cold confidence that
+`triage.mjs:304` actually applies.
+
+**B. Build the similarity probe.** The harness asserts against one hardcoded string. This reads the
+real `precedents.jsonl` and prints a table you can put on screen. Paste this whole block:
 
 ```bash
 cat > lanes/4-memory/sim_probe.mjs <<'EOF'
@@ -255,7 +278,8 @@ Read it out loud like this, because these are the honest answers:
 `"Portable USB rechargeable LED reading light lamp"` against the lamp precedent:
 
 ```
-status READY, confidence 0.90, hts 9405.11.60.10, flags PRECEDENT_APPLIED
+status READY, confidence 0.90, hts 9405.11.60.10
+flags PRECEDENT_APPLIED, LPCO_MISSING, PGA_CONFIRM
 precedent.similarity 0.75, cold_hts 8513.10.20.00, cold_confidence 0.54
 ```
 
@@ -271,8 +295,9 @@ Ask lane 5 for a one-line prompt change so a fuzzy match reads
 `(similarity 0.75)` in the memo. Cheap, and it closes the question.
 
 Your recommendation to lane 3, in one line: leave `PRECEDENT_FLOOR` at 0.55 for the demo, and
-surface similarity in the memo instead of tightening the floor. Raising the floor to 0.9 would
-kill the "survives rewording" claim, which is the more valuable one.
+surface similarity in the memo instead of tightening the floor. The margin is why: raising the
+floor even to 0.56 already breaks a case `eval_retrieval.mjs` asserts, and raising it to 0.9 kills
+the "survives rewording" claim, which is the more valuable one.
 
 **D. Conflicting precedents. This one is a confirmed bug, hand it to lane 3 immediately.**
 
@@ -303,11 +328,13 @@ Fix, verified working: change `>` to `>=`. With that one character, the same tes
 records still beat lower-similarity ones. **This is lane 3's edit, not yours.** Report it,
 give them the repro, let lane 5 merge it.
 
-**E. Signature drift, a risk you own.** `engine/record_precedent.mjs:38-46` contains a **copy**
-of the tokenizer and STOP list from `engine/triage.mjs:117-127`. If lane 3 edits one and not the
-other, signatures diverge, every new precedent stops matching, and the demo dies quietly with no
-error message. There is a comment saying "keep these two in sync"; comments do not enforce
-anything. Tell lane 3 you are watching this, and re-run section 1 after **any** engine merge.
+**E. Signature drift, a risk you own.** The tokenizer and STOP list exist in **three** copies:
+`engine/triage.mjs:117-127`, `engine/record_precedent.mjs:38-46`, and
+`lanes/4-memory/eval_retrieval.mjs:31-38`. If lane 3 edits one and not the others, signatures
+diverge, every new precedent stops matching, and the demo dies quietly with no error message.
+Each file carries a "keep in sync" comment; comments do not enforce anything, so ask lane 5 to
+run `node lanes/4-memory/eval_retrieval.mjs` as a pre-merge gate. It exits non-zero when drift
+breaks a case. Tell lane 3 you are watching this, and re-run section 1 after **any** engine merge.
 
 ### T+1 to T+3, while lane 5 gets one shipment end to end
 
@@ -319,16 +346,24 @@ You are blocked on lane 1 and lane 5 here, so do not sit idle. Two jobs:
    ```bash
    # inside the sandbox
    node engine/process_inbox.mjs --root <ws> | head -5     # read precedent_store.path
-   # on the host, same file must exist and grow
-   wc -l ~/sovereigndesk/workspace/precedents.jsonl
-   sha256sum ~/sovereigndesk/workspace/precedents.jsonl
+
+   # on the host, set STORE once by translating the mount prefix
+   #   /workspace/sovereigndesk/...  ->  ~/sovereigndesk/...
+   STORE=~/sovereigndesk/precedents.jsonl
+   wc -l $STORE
+   sha256sum $STORE
    ```
 
    If the path inside the sandbox is not under the share mount, escalate to lane 1 now.
-   Note the docs disagree on the root: `agent/AGENTS.md:11` says `--root .`,
+   The docs disagree on the root: `agent/AGENTS.md:12` says `--root .`,
    `docs/HACKATHON_BIBLE.md` section 8 says `--root workspace`, `.env.example` says
    `WORKSPACE_ROOT=/workspace/sovereigndesk/workspace`. They put `precedents.jsonl` in
-   different places. Pick one with lane 5 and make everyone use it.
+   different places. Assume the `AGENTS.md` form until lane 5 rules otherwise:
+   `lanes/1-inference/README.md:209` already commits to `--root .` from
+   `/workspace/sovereigndesk`, which puts the store at `~/sovereigndesk/precedents.jsonl` on
+   the host. With `--root workspace` it is `~/sovereigndesk/workspace/precedents.jsonl`, and
+   the bible's §8 host dir is `~/customs-desk`, not `~/sovereigndesk`. Read the printed
+   `precedent_store.path`, do not assume.
 
 2. **Write the memo-side answer.** One paragraph for lane 2's pitch and lane 5's prompt:
    what the memory is, why it is a file and not a database, and what happens when it is wrong.
@@ -343,6 +378,35 @@ the live run.
 Code freeze. Your artifacts for the submission: the similarity table screenshot, the teardown
 recording, and `precedents.jsonl` shown with `cat`.
 
+### Demo state before the pitch. You own the store, so you own this, and nobody else has claimed it.
+
+**The cold half of the flip only exists while the store is cold.** By the time the pitch slot is
+called you will have recorded the override at T+1, re-run it for the teardown at T+3, rehearsed it
+with lane 2 twice, and re-run the loop after submission. The lamp precedent is in the live store
+after the first of those. Anyone who then drops sample 006 in front of a judge gets `READY` /
+`9405.11.60.10` / `PRECEDENT_APPLIED` on the **first** sweep, the cold beat never happens, and
+lane 2's script says a number that is not on screen. This is the single most likely way the
+strongest demo beat dies live, and it dies quietly.
+
+Pick one of these with lane 2 and lane 5 before T+4:30, write it on the index card, and rehearse
+the version you picked:
+
+1. **Two workspaces, recommended.** Lane 5 pins one root for the live loop and you keep a second,
+   permanently cold root for the pitch (`--root <mount>/demo`). Same engine, same mount, empty
+   store. Cron watches the live one; the pitch drops files into the cold one and you fire the sweep
+   by hand. Costs lane 5 one extra `cron add` or one extra `cron run` argument, and lane 6 one
+   `--root` on the board.
+2. **Rotate the store between runs.** `mv precedents.jsonl precedents.$(date +%s).jsonl` on the
+   host immediately before the pitch. This is a rename, not an edit and not a delete, so the
+   append-only rule survives and the old file is still the audit trail. Say that out loud if a
+   judge is watching you do it.
+3. **Do not do the flip live.** Play lane 2's recorded footage for the cold half and demonstrate
+   only the warm state. Weakest option, but it is honest and it always works.
+
+What you must not do is edit `precedents.jsonl` to remove the lamp line, and what nobody must do is
+assume somebody else reset it. Check `wc -l` on the store yourself in the ten minutes before the
+slot, and tell lane 2 what state it is in.
+
 ---
 
 ## 7. The teardown demo, and its shot list
@@ -356,13 +420,18 @@ Confirm the sandbox name and the rebuild verb with lane 1 first. The CLI is alph
 below (the installer may have called it `my-assistant`).
 
 ```bash
+# 0. set these from the sweep's printed precedent_store.path, on the HOST side.
+#    See section 6, T+1. Do not hardcode a guess.
+STORE=~/sovereigndesk/precedents.jsonl
+INBOX=$(dirname $STORE)/inbox
+
 # 1. state before, on the HOST
-cat ~/sovereigndesk/workspace/precedents.jsonl
-wc -l ~/sovereigndesk/workspace/precedents.jsonl
-sha256sum ~/sovereigndesk/workspace/precedents.jsonl
+cat $STORE
+wc -l $STORE
+sha256sum $STORE
 
 # 2. prove the warm result exists right now
-cp engine/samples/shipment_006_precedent_test.json ~/sovereigndesk/workspace/inbox/
+cp engine/samples/shipment_006_precedent_test.json $INBOX/
 nemoclaw customs-desk connect
 #   inside: node engine/process_inbox.mjs --root <ws>   -> READY, 9405.11.60.10, PRECEDENT_APPLIED
 
@@ -373,10 +442,10 @@ nemoclaw customs-desk rebuild
 nemoclaw customs-desk status
 
 # 5. same file, untouched, on the host
-sha256sum ~/sovereigndesk/workspace/precedents.jsonl     # identical hash
+sha256sum $STORE     # identical hash
 
 # 6. re-run the sweep in the NEW sandbox, nothing re-entered
-cp engine/samples/shipment_006_precedent_test.json ~/sovereigndesk/workspace/inbox/
+cp engine/samples/shipment_006_precedent_test.json $INBOX/
 nemoclaw customs-desk connect
 #   inside: node engine/process_inbox.mjs --root <ws>
 #   -> READY, 9405.11.60.10, confidence 0.95, PRECEDENT_APPLIED, duty 2053.8
@@ -415,7 +484,8 @@ Shots 1, 2 and 4 must be legible at pitch-screen size, so bump the font before y
 - **lane 3 (Nishanth, rules engine):** the `triage.mjs:182` supersede bug with the repro from
   6D, and the tokenizer-duplication risk from 6E. Both today, both early.
 - **lane 5 (orchestration):** the request to print `similarity` in the memo's precedent line
-  (`agent/AGENTS.md:51`), and the decision on which `--root` everyone uses.
+  (`agent/AGENTS.md:51`), the decision on which `--root` everyone uses, and
+  `node lanes/4-memory/eval_retrieval.mjs` as a pre-merge gate on any `engine/` change.
 - **lane 2 (sandbox and pitch):** the teardown recording, the similarity table, and the
   "what happens when the memory is wrong" paragraph.
 - **lane 6 (channel and UI):** whether the read-only board shows precedent count and the last
@@ -445,7 +515,9 @@ Shots 1, 2 and 4 must be legible at pitch-screen size, so bump the font before y
   audit trail. Known limit: a partial match around 0.75 can promote a line to READY without a
   human seeing it, which is why similarity goes in the memo.
 - **"Does it survive rewording?"** Reordering and plurals are exact matches. Synonym swaps stay
-  above the floor. Compound words like "nightlight" miss. Measured, table available.
+  above the floor. Compound words like "nightlight" miss. Measured, not asserted:
+  `eval_retrieval.mjs` passes 12 of 12 cases, and the tightest one clears the floor by 0.006.
+  Table available.
 - **"Why not fine-tune the model on the overrides?"** Because then the knowledge is inside a
   model artifact you cannot audit, cannot supersede, and lose when you swap models. The whole
   point is that the model is transient and the memory is permanent. Customs is the first

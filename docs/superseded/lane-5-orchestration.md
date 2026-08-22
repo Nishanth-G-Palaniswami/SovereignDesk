@@ -3,10 +3,12 @@
 **You own:** making the agent run unattended (standing orders installed, cron ticking every
 2 minutes, memo format holding), and being the only person who merges to `main`.
 
-**Before anything else, someone must ask the organizers at check-in whether a six person team
-is allowed.** `docs/HACKATHON_BIBLE.md` §1 records teams as 2 to 4 builders, and the SF edition
-gave small teams a scoring bonus. Everything below assumes six branches. If the answer is no,
-the branch layout changes and you need to know within the first ten minutes.
+**Before anything else, the organizers have to confirm at check-in that a six person team is
+allowed.** `docs/HACKATHON_BIBLE.md` §1 records teams as 2 to 4 builders, and the SF edition gave
+small teams a scoring bonus. Lane 6 owns asking (their README §3, they are at the desk for the
+submission draft anyway). You own not cutting six branches until they come back with an answer. If
+it is no, the branch layout changes and you need to know inside the first ten minutes, so chase it,
+do not wait for it.
 
 ---
 
@@ -67,7 +69,7 @@ because `reclassify` is the only path that writes a precedent and precedents are
 **Never edit or delete `precedents.jsonl`.** It is append-only institutional memory; a precedent is
 superseded by a new `reclassify`, never erased. Keep replies short.
 
-### Three edits it needs before you install it
+### Four edits it needs before you install it
 
 These are defects, not preferences. Make them on `lane/5-orchestration` in the first half hour.
 
@@ -89,8 +91,14 @@ These are defects, not preferences. Make them on `lane/5-orchestration` in the f
    That file's CLI is `--whoami | --login | --post "<text>" | --post-file <path> | --listen`. It
    reads `MATRIX_HOMESERVER`, `MATRIX_ACCESS_TOKEN` and `MATRIX_ROOM_ID` from `.env` at the **repo
    root**, two levels above itself, so `/workspace/sovereigndesk/.env` has to exist inside the
-   sandbox and has to hold the token. Lane 6 gives you the room id and the token; you never paste
-   the token into a command.
+   sandbox and has to hold the token. **Lane 6 writes the token into that file themselves and tells
+   you the room id in chat, never the token** (their README §4 forbids pasting it into chat, and
+   ours has to say the same thing). Your check that it landed is
+   `matrix_bridge.mjs --whoami` returning a user id from inside the sandbox, not seeing the string.
+   One more thing nobody has claimed: if the share mount means the host and the sandbox read the
+   **same** `.env`, `MATRIX_HOMESERVER` cannot be `127.0.0.1` for both. Force lane 6 to pick the
+   box's bridge address for that value and confirm the host-side board and bridge still work with
+   it, before T+3.
 
    While you are in there: safety rule 1 (line 61) says refuse to "post". Add the carve-out in the
    same sentence, or a compliant model refuses its own memo. Wording that keeps the injection answer
@@ -105,6 +113,25 @@ These are defects, not preferences. Make them on `lane/5-orchestration` in the f
    ```
    node /workspace/sovereigndesk/engine/process_inbox.mjs --root /workspace/sovereigndesk/workspace
    ```
+
+   **Then broadcast it, because four other lanes are guessing.** Lane 1's done-definition runs
+   `--root .` from the mount root, `workspace/README.md` documents the runtime dirs one level down,
+   `.env.example` says `/workspace/sovereigndesk/workspace`, and lane 6's board takes its own
+   `--root`. Those are two different locations for `precedents.jsonl`, and the wrong one silently
+   kills lane 4's teardown demo. Post one message: the absolute sandbox root, the absolute host
+   path of the same directory, and the fact that everything (cron, board, pitch `cp` commands,
+   lane 2's `$WS`) uses it. Then update `.env.example` `WORKSPACE_ROOT` to match. **`.env.example`
+   is yours**, nobody else has claimed it, and lane 6 is about to add Matrix variables to the real
+   `.env` that need placeholders committed beside them.
+
+4. **Decide what `--by` carries, or stop claiming a name on stage.** `record_precedent.mjs:29`
+   defaults `--by` to the literal string `broker`, and the reclassify command on `AGENTS.md:29`
+   does not pass it. So every precedent the agent records says `by: "broker"`, and the memo's
+   precedent line renders "broker set this to 9405.11.60.10". Lane 2's pitch says "the memo says
+   which human made that call", and lane 4's teardown shot 1 says "with their name". Both are
+   currently false on the agent path. Either have the agent pass `--by "<the room sender>"` (lane 6's
+   bridge already has `ev.sender`, ask them for it), or tell lanes 2 and 4 to drop the word "name"
+   and say "with the reason on record". One line either way. Do not let it be discovered on camera.
 
 Nothing else in that file gets edited during the build. If the model will not comply, you change the
 memo format (see fallbacks), not the safety rules.
@@ -133,13 +160,29 @@ memo format (see fallbacks), not the safety rules.
 
 | when | do |
 |---|---|
-| **T+0 to T+0:30** | Git spine. Not blocked on the box, so do it while lane 1 fights the installer. Initial commit, `main`, public remote, six branches, post the merge protocol in the team chat. |
-| **T+0:30 to T+1** | On your own laptop: run the sweep against a scratch workspace (commands below) so you know what good output looks like. Make the three `AGENTS.md` edits. Do not install yet, lane 1 does not have a sandbox. |
+| **T+0 to T+0:30** | Git spine. Not blocked on the box, so do it while lane 1 fights the installer. Confirm collaborator access on the existing remote, commit the untracked docs, cut six branches, post the merge protocol in the team chat. |
+| **T+0:30 to T+1** | On your own laptop: `bash scripts/smoke.sh` (WSL or the box, not Git Bash) so you know what good output looks like. Make the four `AGENTS.md` edits. Do not install yet, lane 1 does not have a sandbox. |
 | **T+1 to T+3** | **The milestone.** Copy `AGENTS.md` into the OpenClaw workspace inside the sandbox. Type `sweep` in the Web UI. Tune until the memo matches the format. Nothing else in this lane matters until one shipment goes folder to memo. |
-| **T+3 to T+4** | `openclaw cron add` every 2 minutes, isolated session, announce. Prove unattended: drop a file, sit on your hands, watch it land. Get the job id and hand it to lane 2 for the pitch script. |
+| **T+3 to T+4** | `openclaw cron add` every 2 minutes, isolated session. Prove unattended: drop a file, sit on your hands, watch it land. Get the job id and hand it to lane 2 for the pitch script. |
 | **T+4 to T+4:30** | Merge everything. Run the integration checklist twice, second time on the box. |
 | **T+4:30** | **Freeze.** Announce it. After this only you commit, and only to fix something that breaks the demo. Lane 2 records the backup video now whether or not the loop is pretty. |
 | **T+5 to T+6** | Merge lane 6's submission text, final full run so the box is in a known-good state, rehearse twice with a timer. Submit at least 20 minutes early. |
+
+**Two clock calls nobody else is positioned to make. They are yours because you hold the schedule
+and the merge button.**
+
+- **T+2, the lane 1 checkpoint.** Lane 1 is supposed to go green at T+1:20 and every other lane is
+  blocked on it. If it is not green at T+2, say so out loud and reassign: send one person (lane 4
+  or lane 6, whoever is least blocked) to the box as a second pair of hands, and tell lane 2 to
+  start planning a demo that is the projector board plus recorded footage. There is no laptop
+  fallback, a laptop demo is a disqualification, so the only lever you have is people and time.
+  Lane 1's own README says "do not let five people watch you type", which is right at T+0 and
+  wrong at T+2.
+- **T+5:15, the submission checkpoint.** Lane 6 owns the BuilderBase submission and is also the
+  person most likely to be fighting a homeserver at T+5. Get the portal draft link and shared
+  access from them at T+4:30. If they have not submitted by T+5:15, you submit with whatever
+  exists: repo link, backup video, the two screenshots lane 2 handed over. An entry submitted with
+  a rough video beats a perfect entry submitted after the deadline.
 
 ---
 
@@ -147,26 +190,38 @@ memo format (see fallbacks), not the safety rules.
 
 ### Git spine, first ten minutes
 
-The repo currently has **zero commits**, is on `master`, and has **no remote**. `wv/` sits at the
-repo root with 12 files from a verification run, but `.gitignore:29` is already `wv*/`, so it is
-covered. Do not add another rule for it; just confirm `git status --short` does not list it.
+The repo already exists. Verified 2026-08-22: one commit, `2b5f981`, branch `main`, remote
+`origin` at `https://github.com/Nishanth-G-Palaniswami/SovereignDesk.git`. **Do not run
+`gh repo create`**, it will fail or create a second repo and split the team across two remotes.
+`wv/` and `wv2/` sit at the repo root from verification runs; `.gitignore:30` is already `wv*/`,
+so they are covered. Confirm `git status --short` does not list them rather than adding a rule.
+
+`PRD.md`, `README.md` and `CLAUDE.md` are untracked at that commit, so the public repo a judge
+opens has no front page until you commit them. That is your first push.
 
 ```bash
 cd <repo root>                      # D:\Projects\summer26\Hackathon\SovereignDesk on the laptop
-git branch -M main                  # works on an unborn branch, verified on git 2.47
+git remote -v                       # expect origin, the URL above. If it is missing, add it.
+git log --oneline -1                # expect 2b5f981
 git add -A
-git status --short                  # eyeball it: no .env, no precedents.jsonl, no wv/
+git status --short                  # eyeball it: no .env, no precedents.jsonl, no wv/, no ws/
 cat > .git/COMMIT_MSG <<'MSG'
-SovereignDesk: engine, agent standing orders, lane docs
+SovereignDesk: PRD, README, repo instructions
 
-Node rules engine with real USITC 2026 rev 7 tariff data.
+Front page and lane contracts for the build.
 MSG
 git commit -F .git/COMMIT_MSG       # write the file first, then commit it
-gh repo create <org>/sovereigndesk --public --source . --push   # needs `gh auth status` green
 ```
 
-Public is required, the repo link goes in the BuilderBase submission. Which means: no tokens, no
-real customer data, ever, on any branch.
+Then hand the push command to the human. Public is required, the repo link goes in the
+BuilderBase submission. Which means: no tokens, no real customer data, ever, on any branch.
+
+**The repo lives on Nishanth's personal account, and Nishanth is lane 3, not you.** You have sole
+merge authority to `main` on a remote you cannot write to yet. Before you cut a single branch, get
+the repo owner to add all six people as collaborators with write access
+(`https://github.com/Nishanth-G-Palaniswami/SovereignDesk/settings/access`), and confirm your own
+`gh auth status` is green against that account. Nobody else is going to notice this until the
+first push fails at T+1, which is the worst moment to discover it.
 
 Then create the six branches and tell everyone their name:
 
@@ -179,6 +234,7 @@ done
 ### Install the standing orders
 
 ```bash
+nemoclaw --help                        # NemoClaw is alpha, confirm the verb before you trust it
 nemoclaw customs-desk connect          # sandbox name comes from lane 1, may be my-assistant
 openclaw --help | head -30             # find how this build prints its workspace path
 ls ~/.openclaw/workspace               # documented default
@@ -189,21 +245,37 @@ Every time you edit `AGENTS.md` on the host you have to copy it in again. There 
 
 ### The cron job
 
+**Do not put `--channel matrix` in here on faith.** The bible only ever documents
+`channels add telegram`, and lane 6 assumes no native Matrix channel type exists. Spend two minutes,
+not twenty, finding out:
+
 ```bash
-openclaw cron add --name sweep --every 2m --session isolated \
-  --message "sweep" --announce --channel <matrix-channel-from-lane-6> --to "<room-id>"
+openclaw channels --help               # is there a matrix channel type at all?
+openclaw cron add --help               # confirm every flag below; this CLI is alpha (bible §11)
+```
+
+Default path, no native channel. The cron only has to deliver the word `sweep`; the agent posts the
+memo itself with `matrix_bridge.mjs --post-file` (see edit 2 above), so no `--channel` or `--to` is
+needed:
+
+```bash
+openclaw cron add --name sweep --every 2m --session isolated --message "sweep"
 openclaw cron list                     # note the job id, lane 2 needs it for the pitch
 openclaw cron run <job-id>             # fires immediately, this is the on-stage trigger
 ```
 
+If `openclaw channels` does show a Matrix type, add `--announce --channel matrix --to "<room-id>"`
+and drop the bridge call from `AGENTS.md`. One poster, never two.
+
 `--session isolated` gives each tick a clean context so the agent is not dragging three hours of
-chat history through a 35B model. `--announce` is what pushes the result to the channel instead of
-leaving it in the session log. Confirm the flag names with `openclaw cron add --help` before you
-trust them; this CLI is alpha and the bible's §11 risk register calls out changed flags.
+chat history through a 35B model. `--announce` is what pushes the result to a configured channel
+instead of leaving it in the session log.
 
 ### The tuning loop
 
 ```bash
+# sandbox, once, before you blame the prompt for a missing post
+node /workspace/sovereigndesk/lanes/6-channel-ui/matrix_bridge.mjs --whoami
 # host, drop one file
 cp ~/sovereigndesk/engine/samples/shipment_006_precedent_test.json ~/sovereigndesk/workspace/inbox/
 # sandbox
@@ -250,8 +322,10 @@ Six people, one repo, six hours. The rules:
 
 - **Nobody merges to `main` except you.** Lane owners push their own branch and tell you it is ready.
 - **File ownership settles conflicts before they happen.** `agent/AGENTS.md` is yours alone.
-  `engine/` and `engine/data/` are lane 3's alone. Lane 6 sends you the room id as a message, not as
-  a commit to `AGENTS.md`.
+  `engine/` and `engine/data/` are lane 3's alone. `lanes/6-channel-ui/` is lane 6's alone: you call
+  `matrix_bridge.mjs`, you do not edit it. `.env.example` is yours. The room id and the access
+  token live in `.env` on the box, which `.gitignore` covers; lane 6 writes the token in directly
+  and tells you only the room id. Neither ever lands in a commit, a chat message or a screenshot.
 - **Freeze at T+4:30.** After that only you commit, and only for a demo-breaking bug.
 
 Your merge, every time:
@@ -269,22 +343,72 @@ If the checklist fails and you have not pushed yet: `git reset --hard HEAD~1`, t
 what broke, keep `main` green. `main` being green at all times is worth more than any single lane's
 work, because the backup video and the submission both get cut from `main`.
 
+### Getting `main` onto the box. Nobody else owns this and it is not automatic.
+
+The box does not run your repo. Lane 1 copies `/media/$USER/hackathon/project/.` into
+`~/sovereigndesk/` from a USB snapshot taken before the doors opened. Every merge after that
+lands on GitHub and on six laptops, and **not** on the GB10. Lane 3's sample 001 fix, lane 6's
+board, your `AGENTS.md` edits: none of them are on the demo machine until somebody moves them.
+The demo runs on the box, so `main` being green means nothing on its own.
+
+After every merge, and never less often than every 30 minutes:
+
+```bash
+# on the BOX, in the share-mounted project directory
+cd ~/sovereigndesk
+git status --short         # if this is not a git repo, the USB copy was a plain copy: see below
+git pull --rebase origin main
+node engine/process_inbox.mjs --root <pinned root>   # smoke it before you walk away
+```
+
+If `~/sovereigndesk` is not a git checkout, or the box cannot reach GitHub over venue Wi-Fi, use
+the Ethernet link from your laptop instead and say so in the team channel so nobody assumes the
+box is current:
+
+```bash
+# from the LAPTOP, files only, never .env and never the workspace dirs
+scp -r engine agent scripts lanes <user>@<box-ip>:~/sovereigndesk/
+```
+
+Then re-run `bash scripts/smoke.sh` **on the box**. Integration checklist step 6 is only true if
+the code you checked is the code the box is running.
+
 ---
 
 ## Integration checklist, runs before every merge
 
-Verified working against this repo on Node v24. A failure on any line means do not push.
+Verified working against this repo on Node v24.14.1. A failure on any line means do not push.
+
+**0. Run the script that already does most of this.** `scripts/smoke.sh` exists, names lane 5 as its
+owner in its own header, and asserts the cold and warm numbers, the six result files, §122 being off,
+the 301 authority map, lane 4's retrieval eval, and repo hygiene. It needs nothing but Node: no box,
+no sandbox, no model, no network.
+
+```bash
+bash scripts/smoke.sh                         # last line must read SMOKE PASSED
+```
+
+Run it on the box or in WSL, not in Git Bash on Windows: `mktemp -d` and `$ROOT` come back as MSYS
+paths (`/tmp/...`, `/d/Projects/...`) that Node's `require` cannot resolve, and you get a screen of
+false failures on files that are fine.
+
+Steps 1 to 5 below are the same assertions typed by hand, for when you want to see the numbers
+during the demo rehearsal. Steps 6 and 7 are not in the script and you still have to do them.
 
 **1. Full sweep, all six samples, no crashes.**
 
 ```bash
 W=$(mktemp -d) && mkdir -p $W/inbox && cp engine/samples/*.json $W/inbox/
 node engine/process_inbox.mjs --root $W > /tmp/sweep.json; echo "exit=$?"
-grep -c ENGINE_ERROR /tmp/sweep.json          # expect 0
+grep -c ENGINE_ERROR /tmp/sweep.json          # expect 0; grep exits 1 on zero matches, that is the pass
 ```
 
+All six come back `NEEDS_REVIEW` today, 001 included. That is the open finding at the end of
+`docs/DATA_SWAP.md`, not a regression. If lane 3 lands the fix, 001 flips to `READY` and this line
+of the checklist changes with it.
+
 **2. The precedent flip still produces the demo numbers.** These are the figures in the pitch
-script, so this is the line that protects lane 2.
+script, so this is the line that protects lane 2. Re-verified against this repo.
 
 ```bash
 W2=$(mktemp -d) && mkdir -p $W2/inbox
@@ -307,6 +431,9 @@ Swing is $308.70. Anything quoting $541.80, $2,992.50 or $2,450.70 is a stale sc
 git diff origin/main..HEAD | grep -nEi 'bot[0-9]{6,}:[A-Za-z0-9_-]{30,}|syt_[A-Za-z0-9]{20,}|_TOKEN=[^r$<]'
 git ls-files | grep -E '(^|/)\.env$|precedents\.jsonl'     # both expect empty
 ```
+
+`syt_` is the Matrix access token prefix, so this catches lane 6's token as well as a Telegram one.
+`.env.example` does not match, on purpose: it holds `replace_me` placeholders only.
 
 **4. Engine is still zero dependency.**
 
@@ -346,11 +473,19 @@ to shepherd and no time to reconstruct someone else's intent.
 - **lane 1** for the sandbox name, the share mount path inside the sandbox, and `openclaw` being
   reachable in there. Until that exists you cannot install anything. This is why the git spine is
   first: it is the only work in this lane that does not need the box.
-- **lane 6** for the Matrix room id and the channel name that goes after `--channel`. Until then,
-  tune with the Web UI, which is a fine substitute for everything except the announce path.
+- **lane 6** for `MATRIX_ROOM_ID` and `MATRIX_ACCESS_TOKEN` landing in `/workspace/sovereigndesk/.env`
+  inside the sandbox, and for `matrix_bridge.mjs --whoami` returning a user id from in there. Their
+  own README says the bridge has never been run against a live homeserver, so treat `--whoami` as
+  the handover, not "the file is committed". Until then, tune with the Web UI, which is a fine
+  substitute for everything except the post path.
+- **lane 6 again** for one decision you have to force before T+3: their README says either the agent
+  writes `decisions/` or their bridge does, and asks you to pick. Pick the agent, it is already
+  specified in `agent/AGENTS.md`, and their `matrix_bridge.mjs --listen` deliberately only prints
+  parsed commands as JSON lines rather than executing them. Say so in the team chat so it is settled.
 - **lane 3** for the sample 001 decision (see `docs/DATA_SWAP.md`, closing section). It changes the
   first beat of the demo and it changes what your checklist should expect. Ask them for the answer,
-  do not make it for them.
+  do not make it for them. If they have not decided by T+3, stop waiting: the checklist keeps
+  expecting `NEEDS_REVIEW` on 001 and the demo opens on 006, which is the stronger beat anyway.
 
 ---
 
@@ -363,6 +498,7 @@ to shepherd and no time to reconstruct someone else's intent.
 | Model will not hold the memo format | Four line memo above. The engine JSON is the product. |
 | Model invents a number | Stop everything, this one is fatal to the pitch. Cut the memo to fields quoted verbatim from the engine summary. If it still invents, show the result JSON on lane 6's board and narrate it. |
 | Agent cannot find the engine | Absolute path in `AGENTS.md`, and check the mount with `ls /workspace/sovereigndesk/engine` from inside the sandbox. Half of these are the mount, not the prompt. |
+| Memo written but nothing lands in the room | Not a prompt bug until `--whoami` proves otherwise. Run `node /workspace/sovereigndesk/lanes/6-channel-ui/matrix_bridge.mjs --whoami` in the sandbox: a 401 is lane 6's token, a connection refused is lane 2's egress policy or a `127.0.0.1` left in the sandbox `.env`. |
 | No Matrix, no Telegram, nothing | Web UI plus the projector board. Say plainly it is channel agnostic and Slack or Teams is one flag away. Do not fake a channel. |
 | Merge conflict storm | Call a five minute stop on pushes, rebase the branches yourself in owner order 1, 3, 4, 6, 2, tell people to resume. |
 | A lane owner pushes to `main` anyway | Do not revert in anger. Run the checklist on what landed; if it is green, keep it and restate the rule once. |

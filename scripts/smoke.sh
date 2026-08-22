@@ -110,6 +110,22 @@ else
   pass "no placeholder rates left in hts_subset.csv"
 fi
 
+echo
+echo "[4b] entry-level fees"
+# MPF is clamped to a per-ENTRY minimum and maximum, which is exactly what a per-line
+# ad-valorem rate cannot express. 006 has $6,300 entered, so raw MPF is $21.82 and the
+# floor must lift it to the configured minimum. If this ever equals 21.82, someone has
+# refactored the fee into the line rate and broken the clamp.
+expect "006 MPF clamped to the entry minimum" "$(field "$R6" 'shipment_summary.fees.0.amount')" "32.71"
+expect "006 MPF named"                        "$(field "$R6" 'shipment_summary.fees.0.name')"   "MPF"
+expect "006 HMF charged on an ocean shipment" "$(field "$R6" 'shipment_summary.fees.1.amount')" "7.88"
+expect "006 total payable = duty + fees"      "$(field "$R6" 'shipment_summary.estimated_total_payable')" "2403.09"
+# 004 is not a vessel shipment, so HMF must not appear at all.
+expect "004 mode is not vessel"        "$(field "$R4" 'shipment_summary.fees.1.name')" ""
+expect "004 fees are MPF only"         "$(field "$R4" 'shipment_summary.estimated_fees')" "32.71"
+# duty must NOT absorb the fees: effective_rate stays duty-only
+expect "006 effective_rate excludes fees" "$(field "$R6" 'shipment_summary.effective_rate')" "0.375"
+
 # ---------------------------------------------------------------- 5. precedent
 echo
 echo "[5] precedent round trip"
@@ -155,7 +171,9 @@ else
   pass ".env is not tracked"
 fi
 
-leaked=$(git grep -lIE '(gho_|ghp_|xox[baprs]-|syt_)' -- . ':!scripts/smoke.sh' 2>/dev/null || true)
+# Match token SHAPES, not bare prefixes: lane 5's runbook documents a leak-detection
+# regex, and a prefix-only scan flags the documentation instead of a secret.
+leaked=$(git grep -lIE '(gh[pousr]_[A-Za-z0-9]{36}|xox[baprs]-[A-Za-z0-9]{10,}-[A-Za-z0-9]{10,}|syt_[A-Za-z0-9_=-]{20,}|bot[0-9]{8,}:AA[A-Za-z0-9_-]{30,})' -- . ':!scripts/smoke.sh' 2>/dev/null || true)
 if [ -n "$leaked" ]; then
   fail "possible token committed in: $leaked"
 else
@@ -169,7 +187,7 @@ emdash=$(node -e '
   const fs = require("node:fs");
   const hits = files.filter((f) => {
     if (f.includes("engine/data/usitc/")) return false;
-    try { return fs.readFileSync(f, "utf8").includes("—"); } catch { return false; }
+    try { return fs.readFileSync(f, "utf8").includes(String.fromCharCode(0x2014)); } catch { return false; }
   });
   process.stdout.write(hits.join(" "));
 ' 2>/dev/null)

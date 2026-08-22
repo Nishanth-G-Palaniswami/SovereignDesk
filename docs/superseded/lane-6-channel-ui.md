@@ -127,6 +127,10 @@ Two things that will bite, in order of likelihood:
 - **Registration token.** Recent Conduit refuses to start (or refuses registration) when registration is open with no token. If the log says so, set `CONDUIT_REGISTRATION_TOKEN=<something>` and use the token flow below.
 - **`CONDUIT_ADDRESS=0.0.0.0`.** The default binds loopback only, and loopback inside the OpenShell sandbox is the *sandbox's* loopback, not the host's. Binding the host interface is what makes the sandbox able to reach it at all. This is a policy-relevant decision: tell lane 2 the address and port the moment you set it.
 
+  **Timing collision, sort it out with lane 2 at T+1 rather than at T+2:30.** Their README puts a hands-off freeze on the policy from T+1 to T+3 so that a broken inference route cannot be mistaken for a policy bug, and your allowlist entry is due to them at T+2. One of those has to give. Agree at T+1 on a single named window (ten minutes, announced, with lane 5 told to stop tuning while it happens) in which lane 2 adds exactly one entry and re-runs `policy-list`. Do not discover the conflict by being told to wait an hour.
+
+- **The `.env` question that will cost twenty minutes if you skip it.** If the share mount means the host and the sandbox read the *same* `/workspace/sovereigndesk/.env`, then one `MATRIX_HOMESERVER` value has to work from both sides, and `127.0.0.1` does not. Set it to the box address you gave lane 2, then re-run `--whoami` **on the host as well** to confirm the host-side bridge and board still work with it. Tell lane 5 the value you landed on; they are the ones debugging the post path at T+2.
+
 ### Agent user and access token
 
 ```bash
@@ -187,61 +191,32 @@ If you need a web client and have no installer, `serve.mjs` (section 8, you writ
 
 ---
 
-## 7. The bridge, plain fetch, no SDK
+## 7. The bridge. It already exists, run it
 
-First spend five minutes, no more, on `openclaw channels --help` and `nemoclaw <sandbox> channels add --help`. If a Matrix channel type exists natively, use it and skip most of this. The bible only documents `channels add telegram`, so assume it does not and write the bridge.
+`lanes/6-channel-ui/matrix_bridge.mjs` is in the repo: zero dependencies, plain `fetch`, Client-Server API v3. **Do not write a second one.** It has never been run against a live homeserver, because there was no homeserver when it was written. Your job is to point it at Conduit.
 
-Two calls do the whole job.
-
-**Post** (`PUT`, and the txn id must be unique per message or the server silently dedupes):
-
-```js
-const HS   = process.env.MATRIX_HOMESERVER;
-const TOK  = process.env.MATRIX_ACCESS_TOKEN;
-const ROOM = encodeURIComponent(process.env.MATRIX_ROOM_ID);   // ! and : must be encoded
-
-async function post(text) {
-  const txn = `sd-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const r = await fetch(`${HS}/_matrix/client/v3/rooms/${ROOM}/send/m.room.message/${txn}`, {
-    method: "PUT",
-    headers: { Authorization: `Bearer ${TOK}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ msgtype: "m.text", body: text }),
-  });
-  if (!r.ok) throw new Error(`matrix send ${r.status}: ${await r.text()}`);
-  return (await r.json()).event_id;
-}
+```bash
+node lanes/6-channel-ui/matrix_bridge.mjs --whoami        # run this FIRST
+node lanes/6-channel-ui/matrix_bridge.mjs --login         # mint a token from a password on stdin, once
+node lanes/6-channel-ui/matrix_bridge.mjs --post "bridge online"
+node lanes/6-channel-ui/matrix_bridge.mjs --post-file ~/sovereigndesk/workspace/memos/SHP-2026-0822-006.memo.md
+node lanes/6-channel-ui/matrix_bridge.mjs --listen        # one JSON line per recognised command
 ```
 
-**Read** (long-poll `sync`; `since` makes it a tail instead of a replay):
+`--whoami` is first for a reason: it proves homeserver address, access token and reachability from wherever you ran it, before anything else can confuse you. The file reads `.env` from the repo root itself, BOM stripped, so nothing needs exporting.
 
-```js
-let since = null;
-async function tick() {
-  const q = new URLSearchParams({ timeout: "30000" });
-  if (since) q.set("since", since);
-  const r = await fetch(`${HS}/_matrix/client/v3/sync?${q}`, { headers: { Authorization: `Bearer ${TOK}` } });
-  const j = await r.json();
-  const first = since === null;
-  since = j.next_batch;                                   // persist this to disk
-  if (first) return;                                      // discard history on the first sync
-  const room = j.rooms?.join?.[process.env.MATRIX_ROOM_ID];
-  for (const ev of room?.timeline?.events ?? []) {
-    if (ev.type !== "m.room.message") continue;
-    if (ev.sender === process.env.MATRIX_USER) continue;  // never react to yourself
-    handle(ev.content?.body ?? "");
-  }
-}
-```
+Then spend five minutes, no more, on `openclaw channels --help` and `nemoclaw <sandbox> channels add --help`. Both tools are alpha, so confirm the exact subcommand with `--help` on the day rather than trusting any doc including this one. If a native Matrix channel type exists, use it and tell lane 5 the channel name. The bible only documents `channels add telegram`, so plan on the bridge carrying the memos.
 
-The three bugs that eat an hour, all of them prevented above:
+Four things the file already handles, so do not re-derive them:
 
-1. Not filtering `ev.sender` against your own user id: the bridge replies to its own reply, forever, live, on the projector.
-2. Not persisting `next_batch`: every restart replays the room and re-executes every `reclassify` in it.
-3. Reusing a txn id: the second message vanishes with a 200 OK and no error.
+1. `ev.sender === selfId` is skipped. Without it the bridge answers its own reply, forever, live, on the projector.
+2. The first `/sync` runs with `timeout: 0` only to take a baseline `next_batch`, and the backlog is discarded. Without it every old `reclassify` in the room re-fires on startup. Know the trade: `since` is held in memory, so a restart drops anything sent while it was down. That is the right trade on a demo floor. Do not "improve" it into a disk cache at T+4.
+3. Txn ids are `sd-<epoch>-<counter>`, unique per send. Reuse one and the second message vanishes with a 200 OK and no error. The counter is deliberate over `Math.random`: it stays readable in the homeserver log while you debug on stage.
+4. A `/sync` error retries after 3 seconds instead of killing the process, so a homeserver restart mid-demo does not end the bridge.
 
 ### Reply grammar, exact
 
-These five forms and nothing else. They must match `agent/AGENTS.md` character for character, because the agent and the bridge both parse them.
+These five forms and nothing else. They must match `agent/AGENTS.md` character for character, because the agent and the bridge are two independent readers of the same human input.
 
 ```
 approve <id>
@@ -251,29 +226,21 @@ why <id>
 precedents
 ```
 
-```js
-const GRAMMAR = [
-  ["approve",     /^approve\s+(\S+)$/i],
-  ["reclassify",  /^reclassify\s+(\S+)\s+line\s+(\d+)\s+to\s+([0-9][0-9.]*)(?:\s+because\s+(.+))?$/i],
-  ["status",      /^status$/i],
-  ["why",         /^why\s+(\S+)$/i],
-  ["precedents",  /^precedents$/i],
-];
-```
+`parseCommand` in `matrix_bridge.mjs` already implements all five and is exported, so you can unit-test it without a homeserver. An unrecognised line returns `{ cmd: "unknown", text }`; answer that by posting the five forms verbatim and doing nothing else. **Never guess at a near miss.** `reclassify 006 line one to 9405` must be rejected, not interpreted, and it is: `line one` fails `(\d+)`. A bridge that helpfully infers an HTS code has reintroduced exactly the hallucination risk the whole architecture exists to remove.
 
-Anything that does not match: reply with the five forms verbatim and do nothing else. **Never guess at a near miss.** `reclassify 006 line one to 9405` must be rejected, not interpreted. A bridge that helpfully infers an HTS code has reintroduced exactly the hallucination risk the whole architecture exists to remove.
-
-Trim, collapse whitespace, and strip an Element reply quote (lines starting with `>`) before matching.
+**The one real gap, and it is yours:** `parseCommand` only calls `.trim()`. It does not collapse internal whitespace and it does not strip an Element reply quote, so a reply typed as a quote (`> 📦 SHP-...` then `approve SHP-...`) parses as `unknown`. Drop the `>` lines and collapse runs of whitespace before matching. Test it by replying to a memo in Element rather than typing a fresh message, because a broker on a phone will hit reply.
 
 ### Handing the command to the engine
 
-**Primary:** the bridge validates, then hands the raw command text to the agent session so the agent executes it per `agent/AGENTS.md`. The agent already knows all five verbs and already knows to run
+`--listen` deliberately executes nothing. It prints and stops there, because the agent is the only thing allowed to write decisions or record precedents, and two writers into `decisions/` is exactly how a live demo breaks.
+
+**Primary:** the bridge validates, then the parsed command reaches the agent session so the agent executes it per `agent/AGENTS.md`. The agent already knows all five verbs and already knows to run
 
 ```bash
 node engine/record_precedent.mjs --shipment <id> --line <n> --hts <hts> --reason "<reason>" --root .
 ```
 
-**Fallback**, if there is no clean way to inject a message into the OpenClaw session: the bridge runs that exact command itself with `execFileSync`, and writes `decisions/<id>.decision.json` for `approve`. This is deterministic and cannot hallucinate, so it is a legitimate demo path, not a cheat. But it means the bridge is now the writer, so **tell lane 5 and make sure the agent stops writing decisions**. One writer.
+**Fallback**, if there is no clean way to inject a message into the OpenClaw session: add an `--execute` mode to `matrix_bridge.mjs` that runs that exact command with `execFileSync` and writes `decisions/<id>.decision.json` for `approve`. This is deterministic and cannot hallucinate, so it is a legitimate demo path, not a cheat. But it makes the bridge the writer, so **tell lane 5 and make sure the agent stops writing decisions**. One writer.
 
 Either way, post a confirmation back to the room within a couple of seconds. Silence on the phone in front of judges reads as broken even when it is working.
 
@@ -281,10 +248,10 @@ Either way, post a confirmation back to the room within a couple of seconds. Sil
 
 ## 8. The projector board
 
-`board/serve.mjs` plus `board/index.html`, zero dependencies, run **on the host**:
+This does not exist yet, you write it. Put it beside the bridge, the way lanes 1 and 4 keep their tools: `lanes/6-channel-ui/board/serve.mjs` plus `lanes/6-channel-ui/board/index.html`, zero dependencies, run **on the host**:
 
 ```bash
-node board/serve.mjs --root ~/sovereigndesk/workspace --port 8080
+node lanes/6-channel-ui/board/serve.mjs --root ~/sovereigndesk/workspace --port 8080
 ```
 
 **Read-only, and this is a design decision, not laziness.** `serve.mjs` answers `GET /` and `GET /api/board` and returns **405 to every other method**. There is no route that writes anything under `workspace/`.
@@ -295,17 +262,22 @@ The board's own snapshot cache under `board/cold/` is not a control surface. It 
 
 ### Data
 
-Poll `GET /api/board` every 3 seconds. The server reads `results/*.json` (verified shape, from `engine/triage.mjs`):
+Poll `GET /api/board` every 3 seconds. The server reads `results/*.json`. Shape verified against `engine/triage.mjs:358-388` and against a real sweep of sample 006:
 
 ```
 shipment_id, importer, origin_country, generated_at
 shipment_summary: { status, entered_value, estimated_duty, effective_rate, flags[],
                     lines_needing_human[], precedents_applied[], missing_documents[] }
-lines[]: { line, description, hts, confidence, flags[], needs_human,
-           duty: { mfn_rate, surcharges[], total_rate, duty_est },
-           precedent: { hts, cold_hts, cold_confidence, changed_outcome, similarity, by, reason } | null,
-           declared_check: { declared, engine, duty_delta } | null }
+lines[]: { line, description, qty, unit_value, entered_value, hts, hts_candidates[],
+           confidence, pga[], lpco[], flags[], needs_human,
+           duty: { mfn_rate, surcharges[], total_rate, duty_est, notes[] },
+           precedent: { hts, reason, by, at, source_shipment, similarity,
+                        cold_hts, cold_confidence, changed_outcome } | null,
+           declared_check: { declared, engine, declared_total_rate,
+                             engine_total_rate, duty_delta } | null }
 ```
+
+**Every rate in that JSON is a fraction, not a percent.** Sample 006 warm carries `effective_rate: 0.326`, `total_rate: 0.326`, `mfn_rate: 0.076`. Multiply by 100 exactly once. A board that prints `0.33%` on the projector at the moment the precedent lands is the worst possible bug and it is one character away.
 
 One card per shipment, newest `generated_at` first, at most four visible:
 
@@ -331,11 +303,27 @@ swing $308.70   (broker override, similarity 1.0)
 
 Those figures are verified against the shipped config. Anything quoting a `$541.80` swing, or `$2,992.50` / `$2,450.70`, is stale and predates the USITC data swap.
 
-The cold half is not in the warm file: `process_inbox.mjs` overwrites `results/<id>.result.json` on the re-run. So the server keeps the previous parse in memory whenever a result file's mtime changes, and writes a copy to `board/cold/<id>.<generated_at>.json` so a board restart does not lose the comparison. Alternatively, before the flip:
+The cold half is not in the warm file: `process_inbox.mjs` overwrites `results/<id>.result.json` on the re-run (`engine/process_inbox.mjs`, `fs.writeFileSync(resultPath, ...)`). So the server keeps the previous parse in memory whenever a result file's mtime changes, and writes a copy to `board/cold/<id>.<generated_at>.json` so a board restart does not lose the comparison. Alternatively, before the flip:
 
 ```bash
-cp ~/sovereigndesk/workspace/results/SHP-2026-0822-006.result.json board/cold/
+mkdir -p lanes/6-channel-ui/board/cold
+cp ~/sovereigndesk/workspace/results/SHP-2026-0822-006.result.json lanes/6-channel-ui/board/cold/
 ```
+
+You can produce both halves on your laptop at T+1 while you wait for lane 1, and build the badge against them before the box exists. Run workspace dirs are gitignored, so generate them, do not look for them in the repo:
+
+```bash
+WS=/tmp/sd-board && mkdir -p $WS/inbox
+cp engine/samples/shipment_006_precedent_test.json $WS/inbox/
+node engine/process_inbox.mjs --root $WS                       # cold: NEEDS_REVIEW, 0.60
+cp $WS/results/SHP-2026-0822-006.result.json /tmp/cold.json
+node engine/record_precedent.mjs --shipment SHP-2026-0822-006 --line 1 \
+  --hts 9405.11.60.10 --reason "Mains lamp, not a portable torch." --root $WS
+cp engine/samples/shipment_006_precedent_test.json $WS/inbox/
+node engine/process_inbox.mjs --root $WS                       # warm: READY, 0.95
+```
+
+Then swap the board's `--root` to the live workspace on the box.
 
 Do both. The manual copy costs two seconds and it is insurance on the single strongest beat in the demo.
 
@@ -349,7 +337,7 @@ A hackathon projector is 1280x800, washed out, and the back row is fifteen feet 
 - No animation except a one-second flash when a card's `generated_at` changes. Motion on a projector reads as a glitch.
 - Test it by standing fifteen feet back from the actual projector before the pitch. Not from your chair.
 
-The board is also your **fallback demo surface**: if the homeserver never comes up, the loop is still visibly autonomous on the projector, driven by `openclaw cron run`. It carries the demo without the phone.
+The board is also your **fallback demo surface**: if the homeserver never comes up, the loop is still visibly autonomous on the projector, driven by `openclaw cron run <job-id>` (id from `openclaw cron list`, and confirm both with `--help` on the day, OpenClaw is alpha). It carries the demo without the phone.
 
 ---
 
@@ -360,9 +348,12 @@ The board is also your **fallback demo surface**: if the homeserver never comes 
 | To | What | By |
 |---|---|---|
 | lane 2 | homeserver address and port to allowlist, and confirmation the sandbox reaches it | T+2 |
+| lane 2 | **the demo phone**: a handset with Element installed, signed into the `@broker` account, proven to reach the box from the venue network, with the five reply forms tested by hand. Agree with lane 2 who is physically holding it during the pitch and who is at the keyboard | T+4 |
 | lane 2 | board footage and Matrix room screenshots for the backup video | T+4:30 |
+| lane 5 | the BuilderBase draft link and shared portal access, so somebody other than you can press submit if you are still fighting the homeserver at T+5 | T+4:30 |
 | lane 5 | which process writes `decisions/`, bridge or agent | T+3 |
 | lane 5 | the five grammar forms, confirmed identical to `agent/AGENTS.md` | T+2 |
+| lane 5 | `MATRIX_ROOM_ID`, and either the channel name for `openclaw cron add --channel` or the fact that no native Matrix channel exists and the agent must shell out to `matrix_bridge.mjs --post-file`. `lanes/5-orchestration/README.md` is blocked on exactly this | T+2 |
 | everyone | board URL and room invite | T+3 |
 | everyone | submission draft text for a read-through | T+4:30 |
 
@@ -371,7 +362,7 @@ The board is also your **fallback demo surface**: if the homeserver never comes 
 - **lane 1** for the box and SSH. Nothing you do works before this. If lane 1 is behind, write the bridge and the board on your laptop against a local workspace directory, using the samples. That work ports unchanged.
 - **lane 2** for the egress allowlist entry. Until it exists, run the bridge on the host and prove the round trip there.
 - **lane 3** for the result shape. It is frozen. If it changes, your board breaks silently, so ask before assuming.
-- **lane 4** for the precedent flip rehearsal, and for the answer on whether the demo reclassifies from a similar line (sample 003 line 2, "LED night light lamp, USB rechargeable, portable") or from sample 006's own line. Both work; the first is the better story because it proves Jaccard retrieval across reworded text.
+- **lane 4** for the precedent flip rehearsal. The source-line question is already settled in `lanes/4-memory/README.md`: it reclassifies sample 006's own line 1. Sample 003 line 2, "LED night light lamp, USB rechargeable, portable", gives byte-identical figures anyway, because the signature is sorted unique tokens and 006 line 1 is the same seven tokens in a different order, so similarity is 1.0 either way. On camera that is an order-independent signature match, not a fuzzy one. Say it that way. The fractional-similarity cases are lane 4's to demo.
 - **lane 5** to merge your PR.
 
 ---
@@ -382,11 +373,11 @@ Decide inside five minutes at each rung. Do not debate.
 
 | Symptom | Move | Cost |
 |---|---|---|
-| Conduit will not start or register | Synapse on the host, `pip install matrix-synapse`, `generate_config`. Same C-S API, your bridge code is unchanged | 30 to 40 minutes you do not have. Only if before T+1:30 |
+| Conduit will not start or register | Synapse on the host, in a venv because Ubuntu 24.04 refuses a bare `pip install` (PEP 668): `python3 -m venv ~/syn && ~/syn/bin/pip install matrix-synapse`, then `~/syn/bin/python -m synapse.app.homeserver -c homeserver.yaml --server-name sovereigndesk.local --generate-config --report-stats=no`. Same C-S API, `matrix_bridge.mjs` is unchanged | 30 to 40 minutes you do not have, **plus a PyPI download over venue Wi-Fi**, which is the failure mode the whole plan avoids. Stage the wheels on the USB beforehand or treat this rung as dead. Only if before T+1:30 |
 | Element mobile refuses a plain-HTTP homeserver | Element Desktop on the laptop | Phone demo dies, round trip survives |
 | Phone cannot reach the box | Box onto a phone hotspot, or laptop client over an SSH tunnel | Still local traffic, story intact |
-| No homeserver at all by T+2 | Projector board plus `openclaw cron run` on stage, no chat surface | Lose the human-in-the-loop beat, keep autonomy and the blocked egress |
-| Board will not render in time | `nemoclaw <sandbox> logs --follow` on the projector and read the engine JSON aloud | Ugly, still true |
+| No homeserver at all by T+2 | Projector board plus `openclaw cron run <job-id>` on stage, no chat surface | Lose the human-in-the-loop beat, keep autonomy and the blocked egress |
+| Board will not render in time | `nemoclaw <sandbox> logs --follow` on the projector (confirm the subcommand with `nemoclaw <sandbox> --help`, it is alpha) and read the engine JSON aloud | Ugly, still true |
 | Everything chat-shaped fails | Telegram per `docs/HACKATHON_BIBLE.md` section 8, `.env` fields already exist | **This costs the empty-allowlist story.** `api.telegram.org` goes on the allowlist and the claim drops back to "only a text memo leaves". Last rung. Say the downgrade out loud in the pitch rather than hoping nobody notices |
 
 Bitchat over Bluetooth LE mesh was raised. It is a talking point, not a demo path: it is phone-centric, a headless Linux agent needs a working BLE stack, and a floor with 40 teams is a hostile RF environment. Say that plainly if asked. Do not try it today.
@@ -397,9 +388,9 @@ Bitchat over Bluetooth LE mesh was raised. It is a talking point, not a demo pat
 
 Portal: https://builderbase.com/event/dell-x-nvidia-ai-hackathon-nyc
 
-- [ ] Team name: **SovereignDesk**
+- [ ] Team name: **SovereignDesk**. Two names are live in the repo: `docs/HACKATHON_BIBLE.md` section 12 says "Customs Desk" and `agent/AGENTS.md` still introduces the agent as Customs Desk. You own the submission, so you pick, and the pitch uses the same one. Do not leave both running.
 - [ ] One paragraph: always-on import-compliance triage agent for U.S. customs brokers. Shipment files land in a watched folder, a deterministic Node engine classifies HTS against a USITC Harmonized Tariff Schedule export (2026 rev 7), flags PGA requirements, computes the duty stack and lists missing LPCO documents. A local LLM writes the memo. A broker approves or reclassifies from their phone over a Matrix homeserver running on the box. Every override is stored as institutional precedent that survives a full sandbox rebuild.
-- [ ] Stack line: OpenClaw, NVIDIA NemoClaw, OpenShell, Qwen3.6-35B-A3B local via Ollama or managed vLLM, Node zero-dependency rules engine, **Matrix (Conduit) homeserver on the box**. Not Telegram. Fix this if you copy the old line out of the bible.
+- [ ] Stack line: OpenClaw, NVIDIA NemoClaw, OpenShell, Qwen3.6-35B-A3B local via Ollama or managed vLLM, Node zero-dependency rules engine, USITC HTS 2026 rev 7, **Matrix (Conduit) homeserver on the box**. Not Telegram. Fix this if you copy the old line out of the bible. Matches lane 2's line, keep them identical.
 - [ ] Repo link. **Public**, so: no `.env`, no access token, no bot token, no real customer data. `.gitignore` covers `.env` and `precedents.jsonl`; confirm with `git status` rather than trusting it.
 - [ ] Backup video link, recorded at T+4:30 whether or not the loop looked pretty on the day.
 - [ ] Screenshots: OpenShell `policy-list` (lane 2), the projector board showing the precedent badge, the Matrix room with a memo and a broker reply. **Token cropped out of all three.**

@@ -2389,5 +2389,26 @@
     "watch_prefixes": {
       "7318": "Steel fasteners, AD/CVD orders exist on certain origins; confirm scope and case numbers"
     }
+  },
+  "fees": {
+    "_comment": "Entry-level fees. These are charged on the ENTRY, not per line, which is why the engine computes them from the shipment's total entered value rather than folding them into each line's ad-valorem rate. Folding MPF into a per-line rate silently breaks the min/max clamp on any multi-line entry.",
+    "mpf": {
+      "enabled": true,
+      "rate": 0.003464,
+      "min_usd": 32.71,
+      "max_usd": 634.62,
+      "exempt_origins": [],
+      "source": "VERIFY-CBP-FY2026",
+      "note": "Merchandise Processing Fee, formal entries. The 0.3464% ad-valorem rate has been stable for years. The minimum and maximum are adjusted EVERY FISCAL YEAR for inflation under the FAST Act, and the figures here are the last ones confirmed, not FY2026 values. Verify both on CBP before quoting a number to anyone. Informal entries use a different flat fee that this engine does not model. Goods that qualify under certain trade agreements, USMCA among them, are MPF exempt; qualification is a claim about the goods and their originating status, not about the country alone, so add an origin to exempt_origins only when the claim has actually been substantiated."
+    },
+    "hmf": {
+      "enabled": true,
+      "rate": 0.00125,
+      "modes": [
+        "ocean"
+      ],
+      "source": "VERIFY-CBP",
+      "note": "Harbor Maintenance Fee. 0.125% of entered value, vessel shipments only, no minimum and no maximum. Not charged on air, truck or rail, which is why the engine keys it off the shipment's mode field."
+    }
   }
 }

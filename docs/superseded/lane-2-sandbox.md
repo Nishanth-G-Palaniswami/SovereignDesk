@@ -119,8 +119,12 @@ Ask the organizers, in this order, and post the answers to the team channel imme
 
 1. **"We have six people. Our notes from the event listing (`docs/HACKATHON_BIBLE.md` §1)
    say teams are 2 to 4, and the SF edition gave small teams a scoring bonus. Are we
-   eligible as six, or do we need to split?"** This is a real disqualification risk and it
-   is yours to clear. Do not let it sit until the afternoon.
+   eligible as six, or do we need to split?"** A real disqualification risk. **Lane 6 owns
+   this question** (they are at the desk anyway for the submission draft, and `PRD.md` §10
+   assigns it to them); you ask it only if you reach the organizers first. Whoever asks
+   posts the answer in the team channel, and lanes 1, 3, 4 and 5 all stand down on it once
+   it is there. Four people asking the same organizer the same question wastes goodwill;
+   nobody asking is worse. Check the channel before you queue up.
 2. What is the submission deadline?
 3. How long is the evening pitch slot? (Everything below assumes 3 minutes. If it is 2,
    you cut the precedent beat. If it is 5, you add the trace read-out.)
@@ -146,8 +150,8 @@ Lane 1 owns getting inference up and it gates everyone. Useful work you can do w
 ```bash
 nemoclaw list                                     # find the real sandbox name
 export SANDBOX=customs-desk                       # or whatever the installer called it
-export MOUNT=/workspace/sovereigndesk             # inside the sandbox, from lane 1
-export ROOT=~/sovereigndesk                       # the same directory on the host, from lane 1
+export ROOT=~/sovereigndesk                       # host side of the share mount, from lane 1
+# the same directory seen from inside the sandbox is /workspace/sovereigndesk
 nemoclaw $SANDBOX status
 nemoclaw $SANDBOX --help                          # the CLI is alpha, read it, do not guess
 nemoclaw $SANDBOX policy-add --help               # write the real syntax down before you need it
@@ -199,14 +203,19 @@ curl -m 5 https://google.com    ; echo "exit=$?"
 curl -m 5 -s http://inference.local/v1/models | head -c 200 ; echo
 curl -m 5 -s http://127.0.0.1:11434 ; echo "exit=$? (expected to fail: netns, not the host)"
 
-# 3. filesystem scope: a host path that is not under the mount
+# 3. filesystem scope: host paths that are not under the mount
 ls ~/.ssh 2>&1 | head -1
-ls /media/$USER/hackathon 2>&1 | head -1
-ls /workspace                                    # the mount IS there
+ls /media 2>&1 | head -1                         # the USB mount point on the host
+# type the USB path lane 1 actually used rather than $USER, which may be unset in here
 
-# 4. the workspace the agent actually uses
-ls /workspace/sovereigndesk/workspace
+# 4. the mount IS there, and it is the only host directory you can see
+ls /workspace/sovereigndesk/engine
 ```
+
+If `inference.local` does not resolve, do not guess and do not drop the beat: lane 1 has the
+endpoint NemoClaw actually wired (`env | grep -iE 'inference|base_url|openai'` inside the
+sandbox). The `127.0.0.1` line is the point either way; use `:8000` instead of `:11434` if
+lane 1 landed managed vLLM.
 
 Capture everything. Run the whole block under `script` or paste the terminal output into
 `lanes/2-sandbox/evidence/egress-denied.txt`, and grab the matching denial line from the
@@ -216,7 +225,7 @@ logs terminal into the same file. Screenshot both terminals side by side into
 Then re-run `policy-list` and save the final version:
 
 ```bash
-nemoclaw $SANDBOX policy-list | tee ~/sovereigndesk/lanes/2-sandbox/evidence/policy-list.txt
+nemoclaw $SANDBOX policy-list | tee $ROOT/lanes/2-sandbox/evidence/policy-list.txt
 ```
 
 Re-run this **again** right before the pitch. Somebody will have added something.
@@ -252,7 +261,10 @@ flags, missing documents, duty. Those documents carry supplier pricing and custo
 that brokers are contractually barred from sending to a cloud API. So nobody automates it."
 
 **0:20 to 1:05, the live loop.**
-Drop two shipment files into `inbox/`. Fire the tick: `openclaw cron run sweep`.
+Drop two shipment files into `$WS/inbox/`. Fire the tick: `openclaw cron run <job-id>`.
+Get that job id from lane 5 at T+3 and write it on the index card; `openclaw cron list`
+prints it if you lose it. There is no job named `sweep` to run, `sweep` is the message the
+job sends.
 Phone up, Element open. Two memos arrive.
 Read the audit-risk one aloud: "This one was declared 4016.93.50.50, rubber gaskets. The
 engine says 8413.91.90.96, pump parts. Duty delta $165 on a $6,600 entry. Flagged
@@ -262,11 +274,19 @@ DECLARED_DIFFERS, routed to a human. The engine never silently overrides the fil
 "Same box, different shipment. An LED night light. Cold, the engine says 8513.10.20.00,
 confidence 0.60, below our 0.70 floor, so NEEDS_REVIEW. $2,362.50 of duty at 37.5%."
 Reply from the phone: `reclassify SHP-2026-0822-006 line 1 to 9405.11.60.10`.
-Re-drop the same file. "Warm: 9405.11.60.10, confidence 0.95, READY, $2,053.80 at 32.6%.
+Re-drop the same file, which the sweep already moved:
+`cp $WS/processed/shipment_006_precedent_test.json $WS/inbox/`.
+"Warm: 9405.11.60.10, confidence 0.95, READY, $2,053.80 at 32.6%.
 The swing is $308.70, and the memo says which human made that call and why."
 "That precedent is a line in an append-only JSONL file on the host mount. Tear the sandbox
 down completely and the broker's decision still applies. The model is transient and
 swappable. The memory is permanent and it lives on this desk."
+
+Know this before you stand up: the warm memo says READY and still lists one missing
+document, a DOE compliance certification, because 9405 pulls in a DOE requirement that 8513
+did not. Status is driven by confidence and the declared check, not by the LPCO list. Do not
+read the missing-documents line aloud, and if a judge catches it, say exactly that and note
+the LPCO table is still a demo table. Ask lane 3 at T+4 whether they intend to change it.
 
 **1:50 to 2:25, the security moment.** Switch to the two terminals.
 `curl https://hts.usitc.gov` inside the sandbox, it hangs and fails. Point at the logs
@@ -279,11 +299,17 @@ private address on this box.")
 
 **2:25 to 2:45, why you can trust it.**
 "The model never picks a tariff code. A deterministic Node engine does, with a confidence
-score and a full trace, and anything under 0.70 goes to a licensed broker. The rates are
-not made up: MFN comes from the USITC schedule, 2026 revision 7, 19,856 ten-digit lines,
-and every Section 301 surcharge cites the Chapter 99 heading that sets it, 9903.88.03. We
-also switched Section 122 off, because there is no heading in the 2026 schedule that
-implements it and we were not willing to add ten fabricated points of duty to every memo."
+score and a full trace, and anything under 0.70 goes to a licensed broker. The rates come
+from the USITC schedule, 2026 revision 7: the full export is in the repo, 19,856 ten-digit
+lines, and the demo classifies against a 16-line subset cut from it. Every Section 301
+surcharge cites the Chapter 99 heading that sets it, here 9903.88.03. We switched Section
+122 off: no heading in the 2026 schedule implements it, and we were not adding ten
+fabricated points of duty to every memo."
+
+If a judge asks to see that heading, it is `authority_by_prefix` in
+`engine/data/surcharges.json`, 1,184 prefixes. Have the file open. Do not claim the memo
+prints it: the result JSON's `basis` field currently reads `prefix 8513, origin CN` and
+stops there. Emitting the heading in the output is lane 3's call.
 
 **2:45 to 3:00, the business, and the honest part.**
 "Brokers pay per entry. This runs 24/7 on a $5K box at zero marginal cost, on their own
@@ -303,9 +329,10 @@ of the screen is fine, audio matters more than resolution.
 
 1. **0:15** Terminal: `nemoclaw $SANDBOX status` and `openclaw cron list`. Establishes
    this is running on the GB10, not a laptop. Say the box name out loud.
-2. **0:25** `cp engine/samples/shipment_004_audit_risk.json` and
-   `shipment_006_precedent_test.json` into `inbox/`, then `ls inbox/`.
-3. **0:20** `openclaw cron run sweep`, let the engine output scroll.
+2. **0:25** On the host:
+   `cp $ROOT/engine/samples/shipment_004_audit_risk.json $ROOT/engine/samples/shipment_006_precedent_test.json $WS/inbox/`,
+   then `ls $WS/inbox/`.
+3. **0:20** `openclaw cron run <job-id>`, let the engine output scroll.
 4. **0:25** Phone: Element, two memos arriving. Hold the phone still, this is the shot
    people remember.
 5. **0:35** Phone: type the `reclassify SHP-2026-0822-006 line 1 to 9405.11.60.10` reply,
@@ -313,7 +340,8 @@ of the screen is fine, audio matters more than resolution.
    $2,053.80.
 6. **0:30** Two terminals side by side: the failing `curl https://hts.usitc.gov` and the
    denial in `logs --follow`. Then `policy-list` filling the screen.
-7. **0:20** `cat` the last line of `precedents.jsonl` on the host, outside the sandbox.
+7. **0:20** `tail -1 $WS/precedents.jsonl` on the host, outside the sandbox. (`$WS` is the
+   path the sweep prints as `precedent_store.path`.)
    Say: "this file is on the host mount, the sandbox can be destroyed and rebuilt."
    (If lane 4 has the teardown demo ready, use their footage here instead, it is better.)
 
@@ -338,11 +366,14 @@ the proxy. That is the right boundary: the risky thing is the code the agent exe
 untrusted documents, not the weights.
 
 **"What happens if a malicious invoice contains a prompt injection?"**
-Three layers. It cannot reach the network, there is no destination to exfiltrate to. It
-cannot write outside `memos/` and `decisions/`, and `agent/AGENTS.md` refuses instructions
-to fetch, upload or delete. And it cannot change a tariff code at all: codes come from the
-engine, and the only path that changes one is a human `reclassify` that writes an
-append-only precedent. Worst case is a badly worded memo, which a human reads anyway.
+Three layers, and be precise about which is enforced where. The kernel one: it cannot reach
+the network, there is no destination to exfiltrate to, and its filesystem is scoped to the
+share mount, so there is no host home directory or USB to read. The standing-orders one:
+`agent/AGENTS.md` restricts the agent's writes to `memos/` and `decisions/` and refuses
+instructions to fetch, upload or delete. That layer is a prompt, not a kernel rule, and say
+so if asked. The structural one: it cannot change a tariff code at all, because codes come
+from the engine and the only path that changes one is a human `reclassify` that appends a
+precedent. Worst case is a badly worded memo, which a human reads anyway.
 
 **"Empty allowlist is a nice claim. Show me."**
 `nemoclaw $SANDBOX policy-list`, on the box, right now. Have it up.
@@ -367,9 +398,12 @@ licensed broker decides.
 
 **"Why does the memo say NEEDS_REVIEW so often?"**
 Because that is correct behavior, not a failure. Five of our six samples route to a human
-on purpose: missing FDA and NOAA documents, a missing Children's Product Certificate, a
+by design: missing FDA and NOAA documents, a missing Children's Product Certificate, a
 declared-versus-engine mismatch worth $165. A triage tool that returns READY on everything
-is a liability.
+is a liability. The sixth, sample 001, is the one lane 3 is fixing today: a pump casing
+scores 15 against a complete pump and 13 against pump parts, and the parts line is the
+right answer. Say that plainly if a judge opens it. Do not claim six out of six is
+deliberate.
 
 ---
 

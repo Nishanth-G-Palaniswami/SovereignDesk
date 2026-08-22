@@ -11,8 +11,9 @@ agency flags and duty. You are the person a judge means when they ask "how accur
    Node 18+. It classifies, flags, computes duty and emits a full trace today, on this laptop,
    with real USITC rates. Confirm that yourself in 30 seconds with the first command in
    [Commands](#commands-you-will-actually-type).
-2. **This lane is correctness work, not a rewrite.** Two data defects and one placeholder
-   surface. That is the whole job.
+2. **This lane is correctness work, not a rewrite.** One classification defect, which turns out
+   to be one line of logic and not data (P1), one placeholder table surface (P2), one answer
+   card (P3). That is the whole job.
 3. **There is no Python in this repo and there will not be.** Node is guaranteed inside the
    NemoClaw / OpenShell sandbox because OpenClaw runs on it. `python3` is not guaranteed.
    A port costs six hours you do not have and buys nothing. If anyone proposes one, the answer
@@ -29,7 +30,9 @@ You are done when all four of these are true. None of them is a feeling.
 
 ```bash
 # 1. six samples sweep clean, no crash, no quarantine
-node engine/process_inbox.mjs --root ws        # prints JSON, ws/inbox/_failed/ stays empty
+#    (an empty inbox prints {"shipments": []} and looks like a pass, so re-copy the samples first)
+mkdir -p ws/inbox && cp engine/samples/*.json ws/inbox/ && node engine/process_inbox.mjs --root ws
+#    six entries, none with status ENGINE_ERROR, ws/inbox/_failed/ stays empty
 
 # 2. sample 001 line 1 resolves to 8413.91.90.96 with confidence above 0.70
 #    (today it resolves to 8413.70.20.05 at 0.54, which is wrong; see P1)
@@ -42,7 +45,7 @@ node engine/process_inbox.mjs --root ws        # prints JSON, ws/inbox/_failed/ 
 # 4. no file under engine/data/ still says "Replace with your real ... table"
 ```
 
-Plus one non-command deliverable: the accuracy answer card in [P3](#p3-own-the-accuracy-answer),
+Plus one non-command deliverable: the accuracy answer card in [P3](#p3-own-the-accuracy-answer-t35-to-t45),
 handed to lane 2 (pitch) before T+4.5.
 
 ---
@@ -54,7 +57,7 @@ handed to lane 2 (pitch) before T+4.5.
 | Rewrite the engine, in any language | It works. Six hours. See point 3 above. |
 | Rename any field in `result.json` | Lane 5's prompt and lane 6's board parse this shape. `triage.mjs:13` calls the contract frozen for the day. Adding a field is fine, renaming one breaks two lanes silently. |
 | Point the engine at `hts_full.csv` | Verified: it loads, and classification collapses. Sample 001 line 1 goes to `8413.30.10.00` (pumps for internal combustion engines) at confidence 0.50, line 2 to `4009.11.00.00` (rubber tubing) instead of a gasket heading. `hts_full.csv` has no `keywords` column, so scoring falls back to bare token overlap across 19,856 lines. It is the provenance artifact, not a runtime table. |
-| Port a PGA or LPCO table out of a previous employer's codebase | Two reasons and either one is fatal. It is someone else's IP, and this repo goes public in the BuilderBase submission. Re-derive the ten rules from the agencies' own published requirements. See [P2](#p2-pga-and-lpco-the-last-placeholder-surface). |
+| Port a PGA or LPCO table out of a previous employer's codebase | Two reasons and either one is fatal. It is someone else's IP, and this repo goes public in the BuilderBase submission. Re-derive the ten rules from the agencies' own published requirements. See [P2](#p2-pga-and-lpco-the-last-placeholder-surface-t1-to-t35). |
 | Edit `triage.mjs` tokenizer without mirroring it | `record_precedent.mjs:39-46` duplicates `STOP` and `tokenize()` on purpose, and the comment at `record_precedent.mjs:38` warns about it. Change one and precedent signatures stop matching, silently. Lane 4's whole demo dies. |
 | Touch `engine/data/` after T+4.5 | Data freeze rides with code freeze. Every number in the pitch script and the backup video comes from these files. |
 | Turn `section_122` back on | It fabricated a flat 10% on every line. No `9903` subchapter implementing it exists in the 2026 rev 7 schedule. Re-enable only with a citation to a live Chapter 99 heading. |
@@ -117,8 +120,10 @@ Semantics, implemented at `triage.mjs:199-223`:
   a pump casing.
 
 Prefix matching is longest prefix on digits only, so `8413` matches `8413.91.90.96`, and keys
-beginning with `_` are ignored (`triage.mjs:187-196`). Every table in `engine/data/` uses that
-same matcher, so `_comment` keys are safe everywhere.
+beginning with `_` are ignored (`triage.mjs:187-196`). Three tables go through that matcher and
+only three: `pga_flags.json`, `surcharges.json` `section_301.rates_by_prefix`, and
+`ad_cvd.watch_prefixes`. `lpco_rules.json` is keyed by `requirement_id` and is never prefix
+matched, so its `_comment` is safe only because nothing ever looks that key up.
 
 **`lpco_rules.json`**, `requirement_id` to a list of document strings, plus a `BASE` list applied
 to every entry. Today: `BASE` plus the same 10 `requirement_id`s.
@@ -126,8 +131,9 @@ to every entry. Today: `BASE` plus the same 10 `requirement_id`s.
 - Any `BASE` entry whose text matches `/ocean shipments only/i` is dropped for non ocean modes
   (`triage.mjs:256`). That is the ISF row.
 - Document matching against `shipment.documents_on_file` is loose substring matching on the text
-  **before the em dash separator** in each doc string, split further on the word `or`
-  (`triage.mjs:267-275`). Keep using the same separator style when you add rows or matching
+  **before the first comma-space** in each doc string, split further on the word `or`
+  (`triage.mjs:270-271`, `d.doc.split(", ")[0]`). So `"Children's Product Certificate, CPC"`
+  matches on `children's product certificate`. Keep that separator when you add rows or matching
   silently degrades to comparing whole sentences.
 - Status per document is `ON_FILE` or `MISSING`.
 
@@ -138,8 +144,10 @@ to every entry. Today: `BASE` plus the same 10 `requirement_id`s.
   rate). `8471` is `0.25` under `9903.88.03`. `9503` is absent, so toys carry none.
   When a judge asks where 25% came from, the answer is a heading, not a config file.
 - `section_122`: `"enabled": false`. Leave it false.
-- `ad_cvd.watch_prefixes`: one entry today, `7318` steel fasteners. Adds a note to the line and
-  pulls in the AD/CVD scope memo document. It does not add duty.
+- `ad_cvd.watch_prefixes`: one entry today, `7318` steel fasteners. It appends one string to
+  `duty.notes` (`triage.mjs:247`) and does nothing else: no duty, no document. The AD/CVD scope
+  memo document comes from a different table, the `CBP_ADCVD_CHECK` must-flag on `7318` in
+  `pga_flags.json`. Same prefix, two tables, and only the flag can block an entry.
 
 `hts_full.csv` (19,856 ten digit lines) is a build artifact for provenance. Nothing loads it.
 
@@ -295,6 +303,30 @@ no matching key in `lpco_rules.json` produces a flag with no documents, silently
 together. Re-sweep after every edit: PGA changes move LPCO, LPCO changes move `needs_human`, and
 `needs_human` moves the demo.
 
+### P2.5: the entry-level fees nobody has written down. T+1, ten minutes.
+
+`engine/data/surcharges.json` now carries a `fees` block (MPF and HMF) and `triage.mjs` emits
+`shipment_summary.fees[]`, `estimated_fees` and `estimated_total_payable`. Sample 006 cold is
+$2,362.50 duty plus $32.71 MPF plus $7.88 HMF, so **$2,403.09 total payable**. `effective_rate`
+stays duty-only, which is correct: MPF is clamped to a per-entry minimum and maximum and cannot be
+expressed as a per-line rate.
+
+Two things follow, and both are yours because you own every factual claim about duty:
+
+- **`source` on both fees reads `VERIFY-CBP-FY2026` / `VERIFY-CBP`.** The 0.3464% MPF rate is
+  stable, but the $32.71 minimum and $634.62 maximum are re-indexed for inflation every fiscal year
+  under the FAST Act and the committed figures are the last confirmed ones, not FY2026 values.
+  That is a placeholder marker in a repo whose pitch is "we did not type any of these numbers".
+  Either confirm both against CBP and update `source`, or say it in the same breath as the PGA and
+  LPCO tables: rates are sourced, fee thresholds are last-confirmed. Do not leave a judge to find
+  `VERIFY-` in a file you told them was derived.
+- **Nothing downstream shows the fee.** `process_inbox.mjs`'s per-shipment summary (the JSON the
+  agent actually reads) does not include `fees`, `estimated_fees` or `estimated_total_payable`, the
+  memo format at `agent/AGENTS.md:40-57` has no fee line, and lane 6's board shape does not list
+  them. So the engine computes a total payable that never reaches a human. Decide at T+1 whether
+  that surfaces today, tell lane 5 and lane 6 in one message either way, and make sure lane 2 quotes
+  duty or total payable consistently and never mixes them mid-pitch.
+
 ### P3: own the accuracy answer. T+3.5 to T+4.5.
 
 Write these on a card and hand a copy to lane 2. You are the one who answers them, but the pitch
@@ -305,8 +337,10 @@ has to survive you being at the box.
   `engine/data/usitc/hts_2026_rev_7.json`, 35,496 rows. Not typed by us. Classification runs over
   a curated 16 heading subset, which is a demo scope decision, not a data limit: the full 19,856
   line table is in the repo at `engine/data/hts_full.csv` with real rates. Anything below 0.70
-  confidence, any mismatch with the filer's declared code, and any open agency flag routes to a
-  licensed broker. The agent never files with CBP.
+  confidence, anything with no candidate at all, any mismatch with the filer's declared code, and
+  any document missing under a `REQUIRED` agency flag route to a licensed broker. Do not say "any
+  open agency flag" here: a may-flag at `CONFIRM` is reported and does not block, which is the
+  sample 006 warm case above and a judge can check it. The agent never files with CBP.
 - **"So swap in the full table and you are done?"** No, and be straight about it. I tried it:
   classification quality collapses, because `hts_full.csv` has no curated keywords and scoring
   falls back to raw token overlap. Sample 001 line 1 lands on `8413.30.10.00`, pumps for internal
@@ -329,8 +363,12 @@ has to survive you being at the box.
 
 ## Commands you will actually type
 
-Run from the repo root, `D:\Projects\summer26\Hackathon\SovereignDesk` on the laptop or
-`/workspace/sovereigndesk` on the box. `ws/` is already gitignored.
+Run from the repo root. On the laptop that is `D:\Projects\summer26\Hackathon\SovereignDesk`.
+On the box it is whatever lane 1 mounts, and the repo currently contradicts itself:
+`.env.example` sets `WORKSPACE_ROOT=/workspace/sovereigndesk/workspace`, while
+`docs/HACKATHON_BIBLE.md` §8 shows `nemoclaw share mount ~/customs-desk /workspace/customs-desk`
+and labels its own mount line an example. Take the real path from lane 1 before any `--root`
+goes into a cron job. Do not guess it. `ws/` is already gitignored.
 
 ```bash
 # set up a scratch workspace and sweep all six samples (bash, on the box)
@@ -375,8 +413,13 @@ node scripts/build_hts_from_usitc.mjs --archive engine/data/usitc/hts_2026_rev_7
 
 Rewrites `hts_subset.csv` (rates, descriptions, units, provenance; **keywords are preserved**,
 the curated ones classify better than anything derived), `surcharges.json` (the 301 map and its
-authorities) and `hts_full.csv`. Originals are kept once as `*.placeholder.bak`, so re-running
-never clobbers the pristine copy.
+authorities) and `hts_full.csv`.
+
+`backupOnce` (`build_hts_from_usitc.mjs:80-84`) writes `<file>.placeholder.bak` only when one
+does not already exist, and only for the first two of those three files. **There is no `.bak` in
+this checkout.** The pattern is gitignored, `git ls-files` lists none, and the swap ran before
+the only commit. So a re-run today would snapshot the already-correct tables, not the pristine
+placeholders. Harmless, but `.bak` is not an undo. Your undo is git.
 
 **The gotcha, repeated because it eats an hour:** rates and footnotes live on the nearest
 **ancestor** with a value. Read a 10 digit line on its own and `general` is almost always blank.
@@ -404,9 +447,9 @@ sentence (`build_hts_from_usitc.mjs:74-78`) and records which heading set which 
 | Lane 4 (memory) | Warning that `tokenize()` and `STOP` are duplicated in `record_precedent.mjs:39-46`, and that `PRECEDENT_FLOOR` is 0.55 at `triage.mjs:176` | T+0, before they start |
 
 **You wait on nobody for P1 and P2.** The engine runs on your laptop with plain Node. Do not
-sit idle waiting for lane 1 to bring the box up. Your only real dependency is lane 1 confirming
-`node --version` inside the sandbox, and lane 5 telling you the sandbox path of the workspace
-root so `--root` is right in the cron job.
+sit idle waiting for lane 1 to bring the box up. Your only real dependency is lane 1: `node
+--version` inside the sandbox, and the sandbox path of the share mount, so `--root` is right in
+the cron job lane 5 installs. Ask for both at T+0, they are one message.
 
 **Hard boundary:** you do not merge. Lane 5 has sole merge authority to main. Branch, hand over,
 say what changed and what the six samples now produce.
@@ -421,7 +464,7 @@ say what changed and what the six samples now produce.
 | Both P1 options run out of time | Ship as is and change the story. Sample 001 becomes the low confidence beat, sample 006 becomes the clean one. Tell lane 2 within five minutes so the pitch script is written once. |
 | PGA / LPCO rewrite is not finished by T+3.5 | Stop. Reword the `_comment` in both files to say plainly "demo tables sized for these six shipments, not a production flag set" and put the same sentence on the non-goals slide. Half a rewritten table is worse than an honest one. |
 | A sweep starts throwing | Check `ws/inbox/_failed/`. The engine quarantines rather than crashing. `node engine/triage.mjs <the failed file> --pretty` prints the real error and exit code (2 = bad input, 3 = data load, usually malformed JSON you just edited). |
-| A data edit breaks the demo after freeze | `engine/data/*.placeholder.bak` holds the pre-swap originals; git holds everything else. Restore, re-sweep, re-record. Never demo numbers you have not just seen printed. |
+| A data edit breaks the demo after freeze | `git checkout -- engine/data/` restores the shipped tables (branch `main`, commit `2b5f981`, which is the state every number in this doc was measured on). There are no `.placeholder.bak` files in this checkout, do not go hunting for them. Restore, re-sweep, re-record. Never demo numbers you have not just seen printed. |
 
 ---
 

@@ -206,9 +206,19 @@ nemoclaw customs-desk connect
 
 Then run the done-definition at the top of this page.
 
+**The `--root .` above is your smoke check, not the team's convention.** It proves the mount is
+real and writable from inside the sandbox, which is all you owe anyone. **Lane 5 pins the root the
+cron job, the board and the pitch actually use**, and their current call is one level down
+(`/workspace/sovereigndesk/workspace`, matching `workspace/README.md` and `.env.example`). Do not
+let lanes 2, 4 and 6 read this page as the decision: three of them are already quoting three
+different paths. When lane 5 posts the pinned root, run one sweep against it so the real directories
+exist on the host, and hand that host path out as fact number four in the table below.
+
 Layout note that matters to lane 4: with `--root .` from `/workspace/sovereigndesk`, the engine
 creates `inbox/ processed/ results/ memos/ decisions/` **at the mount root**, which is host storage.
-That is exactly what you want. Verify it on the host side, in the other terminal:
+With lane 5's root they land one level down. Either is fine, **one of them being live is not**: two
+`inbox/` directories on the box is how a file dropped during the pitch is swept by nothing. Verify
+on the host side, in the other terminal:
 
 ```bash
 ls ~/sovereigndesk/results ~/sovereigndesk/processed
@@ -281,6 +291,14 @@ Post these five facts in the team channel. Do not make anyone ask.
 
 - `scripts/prep_usb.ps1` is referenced in the bible but is **not in this repo**. Type the USB staging
   commands by hand from §5 of the bible. Do not go looking for the script.
+- **Nobody in this repo owns packing the USB, and everything you do assumes it is packed.** Claim
+  it: before you leave for the venue, or in the first two minutes at the desk, run
+  `ls /media/$USER/hackathon/` and confirm four things exist. `ollama/models` with the
+  `qwen3.6:35b` blobs and `ollama-linux-arm64.tgz` (your default path, §3a). `models/` with the
+  NVFP4 weights if anyone intends Plan B. `project/` with this repo. `channel/` with the Conduit
+  aarch64 binary, which is lane 6's item and is **not** in the bible §7 pack list, so ask them
+  directly rather than assuming. A missing `ollama/` folder at T+0:10 is a dead day and there is no
+  fallback for it: the weights are 22 GB and the venue Wi-Fi will not carry them.
 - `.env.example` has `WORKSPACE_ROOT=/workspace/sovereigndesk/workspace`, while `agent/AGENTS.md` has
   the agent run `node engine/process_inbox.mjs --root .` from a directory that contains `engine/`.
   Those are two different conventions. This page uses the AGENTS.md one, since that is what the agent

@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SovereignDesk</title>
+<style>
+  /* Projector rules: nothing below 20px, no mid-greys on dark, no thin weights.
+     This gets shown on a badly calibrated projector in a bright room. */
+  :root {
+    --bg:#0a0d12; --panel:#121721; --line:#263041; --ink:#e8eef7; --dim:#93a4bd;
+    --ok:#3ddc84; --warn:#ffb02e; --bad:#ff5d5d; --accent:#5aa9ff; --mem:#c07cff;
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; }
+  body {
+    background:var(--bg); color:var(--ink);
+    font:20px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    display:flex; flex-direction:column;
+  }
+  header {
+    display:flex; align-items:center; gap:20px; flex-wrap:wrap;
+    padding:14px 22px; border-bottom:2px solid var(--line); background:var(--panel);
+  }
+  header h1 { font-size:26px; margin:0; letter-spacing:.5px; }
+  header .sub { color:var(--dim); font-size:17px; }
+  .spacer { flex:1; }
+  .chip {
+    padding:7px 14px; border-radius:999px; border:2px solid var(--line);
+    font-size:17px; white-space:nowrap;
+  }
+  .chip.good { border-color:var(--ok); color:var(--ok); }
+  .chip.bad  { border-color:var(--bad); color:var(--bad); }
+  .chip.mem  { border-color:var(--mem); color:var(--mem); }
+
+  main { flex:1; display:grid; grid-template-columns: 1.55fr 1fr; gap:16px; padding:16px; min-height:0; }
+  .col { display:flex; flex-direction:column; gap:16px; min-height:0; }
+  .panel { background:var(--panel); border:2px solid var(--line); border-radius:12px; display:flex; flex-direction:column; min-height:0; }
+  .panel > h2 {
+    margin:0; padding:12px 18px; font-size:18px; letter-spacing:1.5px; text-transform:uppercase;
+    color:var(--dim); border-bottom:2px solid var(--line);
+  }
+  .panel > .body { padding:16px 18px; overflow:auto; min-height:0; }
+
+  .status { font-size:30px; font-weight:700; letter-spacing:1px; }
+  .status.READY { color:var(--ok); }
+  .status.NEEDS_REVIEW { color:var(--warn); }
+  .muted { color:var(--dim); }
+  .big { font-size:26px; }
+
+  table { width:100%; border-collapse:collapse; }
+  td, th { padding:8px 10px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-size:16px; text-transform:uppercase; letter-spacing:1px; }
+
+  .flag { display:inline-block; padding:4px 10px; margin:3px 6px 3px 0; border-radius:6px;
+          font-size:15px; border:2px solid var(--warn); color:var(--warn); }
+  .flag.PRECEDENT_APPLIED { border-color:var(--mem); color:var(--mem); }
+  .flag.DECLARED_DIFFERS { border-color:var(--bad); color:var(--bad); }
+
+  .memo { white-space:pre-wrap; font-size:20px; line-height:1.55; }
+
+  .precedent {
+    border:3px solid var(--mem); border-radius:10px; padding:14px 16px; margin-top:10px;
+    background:rgba(192,124,255,.08);
+  }
+  .precedent .lead { color:var(--mem); font-size:18px; letter-spacing:1px; text-transform:uppercase; }
+  .flash { animation:flash 1.2s ease-out 2; }
+  @keyframes flash { 0%,100%{background:rgba(192,124,255,.08);} 40%{background:rgba(192,124,255,.34);} }
+
+  ul.list { list-style:none; margin:0; padding:0; }
+  ul.list li { padding:9px 0; border-bottom:1px solid var(--line); cursor:pointer; }
+  ul.list li:hover { color:var(--accent); }
+  ul.list li.sel { color:var(--accent); font-weight:700; }
+
+  #log { font-size:16px; line-height:1.65; }
+  #log div { padding:2px 0; border:0; }
+  #log .t { color:var(--dim); }
+
+  button {
+    font:inherit; font-size:19px; padding:12px 20px; border-radius:10px; cursor:pointer;
+    border:2px solid var(--line); background:#1b2331; color:var(--ink);
+  }
+  button:hover { border-color:var(--accent); }
+  button.primary { border-color:var(--ok); color:var(--ok); }
+  button.warn { border-color:var(--warn); color:var(--warn); }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+  kbd { border:1px solid var(--line); border-bottom-width:3px; border-radius:5px; padding:1px 7px; font-size:15px; color:var(--dim); }
+  input, textarea {
+    font:inherit; font-size:19px; background:#0d1218; color:var(--ink);
+    border:2px solid var(--line); border-radius:8px; padding:10px 12px; width:100%;
+  }
+  dialog {
+    background:var(--panel); color:var(--ink); border:2px solid var(--accent);
+    border-radius:12px; padding:24px; width:min(680px,92vw);
+  }
+  dialog::backdrop { background:rgba(0,0,0,.72); }
+  label { display:block; margin:14px 0 6px; color:var(--dim); font-size:17px; }
+  .ab { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:12px; }
+  .ab .card { border:2px solid var(--line); border-radius:10px; padding:12px 14px; }
+  .ab .card.on { border-color:var(--mem); }
+  .ab .card.off { border-color:var(--bad); }
+  .ab h3 { margin:0 0 8px; font-size:16px; letter-spacing:1px; text-transform:uppercase; color:var(--dim); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>SovereignDesk</h1>
+  <span class="sub">customs desk that doesn't forget</span>
+  <span class="spacer"></span>
+  <span class="chip good" id="egress">EGRESS: DROP &middot; no allowlist</span>
+  <span class="chip mem" id="memcount">precedents 0</span>
+  <span class="chip" id="conn">connecting</span>
+</header>
+
+<main>
+  <div class="col">
+    <section class="panel" style="flex:1">
+      <h2>Shipment</h2>
+      <div class="body" id="detail"><div class="muted">waiting for the first sweep</div></div>
+    </section>
+    <section class="panel">
+      <h2>Memo</h2>
+      <div class="body memo" id="memo"><span class="muted">no memo yet. the agent writes this.</span></div>
+    </section>
+  </div>
+
+  <div class="col">
+    <section class="panel">
+      <h2>Queue</h2>
+      <div class="body"><ul class="list" id="queue"></ul></div>
+    </section>
+    <section class="panel" style="flex:1">
+      <h2>Memory</h2>
+      <div class="body" id="memory"><div class="muted">no precedent recalled</div></div>
+    </section>
+    <section class="panel">
+      <h2>Event log</h2>
+      <div class="body" id="log"></div>
+    </section>
+  </div>
+</main>
+
+<dialog id="dlg">
+  <h2 style="margin:0 0 6px">Reclassify</h2>
+  <div class="muted" style="font-size:17px">
+    The reason is not a comment. It becomes the institutional memory every future shipment reads.
+  </div>
+  <label for="dline">Line</label><input id="dline" type="number" min="1" value="1">
+  <label for="dhts">Correct HTS</label><input id="dhts" placeholder="9405.11.60.10">
+  <label for="dreason">Reason</label><textarea id="dreason" rows="3" placeholder="Ceiling mounted, mains powered, not a self contained portable lamp."></textarea>
+  <div class="row" style="margin-top:18px; justify-content:flex-end">
+    <button onclick="dlg.close()">Cancel</button>
+    <button class="primary" onclick="submitReclass()">Record precedent</button>
+  </div>
+</dialog>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let SHIPMENTS = [], SELECTED = null, LAST_PRECEDENT_KEY = null;
+
+const money = (n) => n === undefined || n === null ? "-" : "$" + Number(n).toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2});
+const pct = (r) => r === undefined || r === null ? "-" : (Number(r) * 100).toFixed(2) + "%";
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function log(msg, cls = "") {
+  const d = document.createElement("div");
+  d.innerHTML = `<span class="t">${new Date().toLocaleTimeString()}</span> ${esc(msg)}`;
+  if (cls) d.className = cls;
+  $("log").prepend(d);
+  while ($("log").children.length > 60) $("log").lastChild.remove();
+}
+
+async function load(selectId) {
+  const r = await fetch("/api/shipments");
+  SHIPMENTS = await r.json();
+  const want = selectId || (SELECTED && SELECTED.shipment_id) || (SHIPMENTS[0] && SHIPMENTS[0].shipment_id);
+  SELECTED = SHIPMENTS.find((s) => s.shipment_id === want) || SHIPMENTS[0] || null;
+  renderQueue(); renderDetail(); renderMemory(); renderMemo();
+}
+
+function renderQueue() {
+  $("queue").innerHTML = SHIPMENTS.map((s) => {
+    const st = s.shipment_summary?.status || "?";
+    const sel = SELECTED && s.shipment_id === SELECTED.shipment_id ? " sel" : "";
+    const dot = st === "READY" ? "var(--ok)" : "var(--warn)";
+    return `<li class="${sel.trim()}" onclick="pick('${esc(s.shipment_id)}')">
+      <span style="color:${dot}">&#9679;</span> ${esc(s.shipment_id)}
+      <span class="muted" style="font-size:16px"> ${esc(s.importer || "")}</span></li>`;
+  }).join("") || `<li class="muted">empty</li>`;
+}
+
+function pick(id) { SELECTED = SHIPMENTS.find((s) => s.shipment_id === id); renderQueue(); renderDetail(); renderMemory(); renderMemo(); }
+
+function renderDetail() {
+  const s = SELECTED;
+  if (!s) { $("detail").innerHTML = `<div class="muted">waiting for the first sweep</div>`; return; }
+  const sum = s.shipment_summary || {};
+  const fees = (sum.fees || []).map((f) => `${f.name} ${money(f.amount)}`).join(" &middot; ") || "none";
+  const lines = (s.lines || []).map((l) => `
+    <tr>
+      <td>${l.line}</td>
+      <td>${esc(l.description)}</td>
+      <td><b>${esc(l.hts || "-")}</b><div class="muted" style="font-size:15px">conf ${l.confidence}</div></td>
+      <td>${pct(l.duty?.total_rate)}<div class="muted" style="font-size:15px">${money(l.duty?.duty_est)}</div></td>
+    </tr>`).join("");
+  $("detail").innerHTML = `
+    <div class="row" style="justify-content:space-between; align-items:flex-start">
+      <div>
+        <div class="big"><b>${esc(s.shipment_id)}</b></div>
+        <div class="muted">${esc(s.importer || "")} &middot; origin ${esc(s.origin_country || "?")} &middot; ${esc(s.mode || "mode?")}</div>
+      </div>
+      <div class="status ${esc(sum.status)}">${esc(sum.status || "?")}</div>
+    </div>
+    <div style="margin:14px 0">${(sum.flags || []).map((f) => `<span class="flag ${esc(f)}">${esc(f)}</span>`).join("") || '<span class="muted">no flags</span>'}</div>
+    <table>
+      <tr><th>#</th><th>Description</th><th>HTS</th><th>Rate</th></tr>
+      ${lines}
+    </table>
+    <table style="margin-top:14px">
+      <tr><th>Entered</th><th>Duty</th><th>Fees</th><th>Total payable</th></tr>
+      <tr>
+        <td>${money(sum.entered_value)}</td>
+        <td>${money(sum.estimated_duty)}<div class="muted" style="font-size:15px">${pct(sum.effective_rate)}</div></td>
+        <td>${money(sum.estimated_fees)}<div class="muted" style="font-size:15px">${fees}</div></td>
+        <td class="big">${money(sum.estimated_total_payable)}</td>
+      </tr>
+    </table>
+    ${(sum.missing_documents || []).length ? `<div style="margin-top:12px"><span class="muted">missing documents:</span> ${sum.missing_documents.map(esc).join(", ")}</div>` : ""}
+    <div class="row" style="margin-top:18px">
+      <button class="primary" onclick="approve()">Approve <kbd>a</kbd></button>
+      <button class="warn" onclick="openReclass()">Reclassify <kbd>r</kbd></button>
+      <button onclick="ab()">Memory A/B <kbd>m</kbd></button>
+      ${s.decision ? `<span class="chip good">${esc(s.decision.decision)}</span>` : ""}
+    </div>
+    <div id="abzone"></div>`;
+}
+
+function renderMemo() {
+  $("memo").innerHTML = SELECTED?.memo
+    ? esc(SELECTED.memo)
+    : `<span class="muted">no memo yet. the agent writes this from the engine output.</span>`;
+}
+
+function renderMemory() {
+  const applied = (SELECTED?.lines || []).filter((l) => l.precedent);
+  if (!applied.length) { $("memory").innerHTML = `<div class="muted">no precedent recalled for this shipment</div>`; return; }
+  const key = SELECTED.shipment_id + ":" + applied.map((l) => l.precedent.hts).join(",");
+  $("memory").innerHTML = applied.map((l) => {
+    const p = l.precedent;
+    return `<div class="precedent">
+      <div class="lead">precedent applied &middot; line ${l.line} &middot; similarity ${p.similarity}</div>
+      <div style="margin-top:8px"><b>${esc(p.hts)}</b> <span class="muted">set by ${esc(p.by)} on ${esc(p.source_shipment || "?")}</span></div>
+      <div style="margin-top:8px">"${esc(p.reason)}"</div>
+      ${p.cold_hts ? `<div class="muted" style="margin-top:10px">cold engine would have said <b>${esc(p.cold_hts)}</b> at confidence ${p.cold_confidence}</div>` : ""}
+    </div>`;
+  }).join("");
+  if (key !== LAST_PRECEDENT_KEY) {
+    LAST_PRECEDENT_KEY = key;
+    $("memory").querySelectorAll(".precedent").forEach((n) => n.classList.add("flash"));
+    log("precedent recalled and applied", "");
+  }
+}
+
+async function approve() {
+  if (!SELECTED) return;
+  const r = await fetch("/api/review", {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ shipment_id: SELECTED.shipment_id, action: "APPROVE" }),
+  });
+  const j = await r.json();
+  log(r.ok ? `approved ${SELECTED.shipment_id}` : `approve failed: ${j.error}`);
+  load(SELECTED.shipment_id);
+}
+
+function openReclass() {
+  if (!SELECTED) return;
+  const low = (SELECTED.lines || []).find((l) => l.needs_human) || (SELECTED.lines || [])[0];
+  $("dline").value = low ? low.line : 1;
+  $("dhts").value = ""; $("dreason").value = "";
+  $("dlg").showModal(); $("dhts").focus();
+}
+
+async function submitReclass() {
+  const body = {
+    shipment_id: SELECTED.shipment_id, action: "RECLASSIFY",
+    line: Number($("dline").value), hts: $("dhts").value.trim(), reason: $("dreason").value.trim(),
+  };
+  if (!body.hts || !body.reason) { alert("HTS and reason are both required. The reason is the memory."); return; }
+  const r = await fetch("/api/review", {
+    method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(body),
+  });
+  const j = await r.json();
+  if (!r.ok) { alert(j.error); return; }
+  $("dlg").close();
+  log(`precedent recorded: ${body.hts} on line ${body.line}`);
+  load(SELECTED.shipment_id);
+}
+
+/** The A/B moment: same file, memory off, then memory on. Writes nothing. */
+async function ab() {
+  if (!SELECTED) return;
+  const zone = $("abzone");
+  zone.innerHTML = `<div class="muted" style="margin-top:14px">re-running with memory off, then on...</div>`;
+  try {
+    const [off, on] = await Promise.all([
+      fetch("/api/replay", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({shipment_id: SELECTED.shipment_id, memory:false}) }).then((r) => r.json()),
+      fetch("/api/replay", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({shipment_id: SELECTED.shipment_id, memory:true}) }).then((r) => r.json()),
+    ]);
+    if (off.error || on.error) { zone.innerHTML = `<div class="muted" style="margin-top:14px">${esc(off.error || on.error)}</div>`; return; }
+    const card = (r, on_) => {
+      const l = r.result.lines[0], s = r.result.shipment_summary;
+      return `<div class="card ${on_ ? "on" : "off"}">
+        <h3>memory ${on_ ? "on" : "off"}</h3>
+        <div class="big"><b>${esc(l.hts)}</b></div>
+        <div class="muted">confidence ${l.confidence}</div>
+        <div style="margin-top:6px">${esc(s.status)} &middot; ${money(l.duty.duty_est)}</div>
+      </div>`;
+    };
+    zone.innerHTML = `<div class="ab">${card(off,false)}${card(on,true)}</div>`;
+    log("A/B: memory off vs on, same input file, nothing retrained");
+  } catch (e) { zone.innerHTML = `<div class="muted">${esc(e.message)}</div>`; }
+}
+
+document.addEventListener("keydown", (e) => {
+  if ($("dlg").open || ["INPUT","TEXTAREA"].includes(document.activeElement?.tagName)) return;
+  if (e.key === "a") approve();
+  if (e.key === "r") openReclass();
+  if (e.key === "m") ab();
+});
+
+const es = new EventSource("/api/stream");
+es.addEventListener("hello", (e) => {
+  $("conn").textContent = "live"; $("conn").className = "chip good";
+  $("memcount").textContent = "precedents " + JSON.parse(e.data).precedents;
+  log("connected to the box");
+});
+es.addEventListener("refresh", (e) => {
+  const d = JSON.parse(e.data);
+  $("memcount").textContent = "precedents " + d.precedents;
+  log("change in " + d.reason);
+  load();
+});
+es.onerror = () => { $("conn").textContent = "reconnecting"; $("conn").className = "chip bad"; };
+
+load();
+</script>
+</body>
+</html>
