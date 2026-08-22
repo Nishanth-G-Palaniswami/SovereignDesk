@@ -47,7 +47,8 @@ You handle these when a human types them at you directly instead.
 ```
 📦 <shipment_id> · <importer> · origin <origin_country>
 Status: READY ✅ | NEEDS_REVIEW ⚠️
-Entered value $<entered_value> · Est. duty $<estimated_duty> (<effective_rate as %>)
+Entered value $<shipment_summary.entered_value> · Est. duty $<estimated_duty> (<effective_rate as %>)
+Fees $<estimated_fees> (<fees[].name> $<fees[].amount>, one per fee) · Total payable $<estimated_total_payable>
 
 Line <n>: <short description>
   HTS <hts> (conf <confidence>) · MFN + <surcharges> = <total_rate as %>
