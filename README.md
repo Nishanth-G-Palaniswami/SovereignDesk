@@ -18,25 +18,57 @@ vertical, not the product.
 **Read [PLAN.md](PLAN.md).** It is the single plan: architecture, data, build phases, the
 six lanes, the demo script, and the risks. Everything else here is reference.
 
-## Quickstart
+## Running it
 
-Node 24. No dependencies, no build step, no box required.
+The only prerequisite is Node 24. There is no `package.json`: nothing to `npm install`, no
+build step, no bundler, no Python. Clone and run.
 
 ```bash
+git clone https://github.com/Nishanth-G-Palaniswami/SovereignDesk.git
+cd SovereignDesk
 bash scripts/smoke.sh
 ```
 
-That runs the whole loop and asserts every number in the plan. Green means the engine, the
-real tariff data, the entry fees and the precedent round trip all work.
+The smoke script runs the whole loop and asserts every number in the plan. Green means the
+engine, the real tariff data, the entry fees and the precedent round trip all work. On
+Windows, run it from Git Bash; every other command below also works as is in PowerShell.
 
-Drive it by hand:
+### 1. The backend: sweep the inbox
 
 ```bash
 mkdir -p ws/inbox && cp engine/samples/*.json ws/inbox/
 node engine/process_inbox.mjs --root ws
 ```
 
-Then the part that matters. Teach it something, and watch it not forget:
+Reads `ws/inbox/*.json`, writes one result file per shipment to `ws/results/`, moves the
+input to `ws/processed/`. This command is the entire backend tick: on the box a cron agent
+runs it every couple of minutes, anywhere else you run it when files land.
+
+### 2. The memos: a local model explains the results
+
+```bash
+node lanes/1-inference/write_memos.mjs --root ws --model llama3.2:3b
+```
+
+Needs a local [Ollama](https://ollama.com) with any chat model pulled (`ollama pull
+llama3.2:3b` is a 2 GB starting point). The model writes prose only: every figure in a
+memo is copied from the engine result, a validator rejects drafts that invent a code, a
+precedent, or an agency status, and nothing the model writes is ever read back by the
+engine. Skip this step and the console shows "no memo yet" on each card; everything else
+still works.
+
+### 3. The UI: the review console
+
+```bash
+node lanes/6-channel-ui/server.mjs --root ws --port 7777
+```
+
+Open http://127.0.0.1:7777. Loopback only, zero dependencies, updates live as results and
+memos land. Press `a` to approve, `r` to reclassify, `m` for the memory A/B that reruns
+the same file with the precedent store switched off and on, side by side. Running it on a
+headless box? Tunnel: `ssh -L 7777:127.0.0.1:7777 user@box`, then open the same URL.
+
+### 4. The point: teach it something, and watch it not forget
 
 ```bash
 node engine/record_precedent.mjs --shipment SHP-2026-0822-003 --line 2 \
@@ -48,16 +80,8 @@ node engine/process_inbox.mjs --root ws
 Sample 006 moves from `8513.10.20.00`, confidence 0.60, NEEDS_REVIEW, $2,362.50 duty, to
 `9405.11.60.10`, confidence 0.95, READY, $2,053.80. A $308.70 swing on one shipment line.
 Nothing was retrained, and the broker's reasoning is now attached to every future shipment
-that looks like this one.
-
-The console:
-
-```bash
-node lanes/6-channel-ui/server.mjs --root ws --port 7777
-```
-
-Loopback only. Press `a` to approve, `r` to reclassify, `m` for the memory A/B that reruns
-the same file with the precedent store switched off and on, side by side.
+that looks like this one. Re-run step 2 with `--force` to have the memo rewritten for the
+warm result, or press `m` in the console to see cold and warm side by side.
 
 ## Layout
 
