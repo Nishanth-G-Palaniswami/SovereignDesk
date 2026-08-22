@@ -27,6 +27,18 @@
  *                               without the precedent store. This is the A/B moment: same
  *                               file, memory off gets it wrong, memory on gets it right.
  *                               Non-destructive, it never touches results/.
+ *   POST /api/mock/:n           DEV ONLY. Plays mock script 1 (cold), 2 (warm) or
+ *                               3 (precedent suggested, not applied). In-memory only.
+ *   POST /api/reset             Drops the mock overlay. Never touches results/, decisions/
+ *                               or precedents.jsonl: those are the audit trail.
+ *
+ * SSE EVENTS. `hello` on connect and `refresh` on any filesystem change are the original
+ * pair and stay exactly as they were: the real pipeline drives those, and the page reloads
+ * from /api/shipments when one arrives. The named lifecycle events (shipment.new,
+ * rules.done, memory.recalled, memo.ready, review.awaiting, log) carry per-stage detail so
+ * the log and memory panels have something to narrate. Today only the mock emits the full
+ * lifecycle; the live path emits `refresh` plus `log`, because the engine is a single
+ * synchronous sweep and does not report progress. Do not pretend otherwise on stage.
  */
 
 import fs from "node:fs";
@@ -35,6 +47,7 @@ import http from "node:http";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
+import { SCRIPTS, play } from "./mock_events.mjs";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -57,6 +70,14 @@ for (const d of Object.values(dirs)) fs.mkdirSync(d, { recursive: true });
 
 // ---------------------------------------------------------------- data
 
+/**
+ * Mock shipments live here and nowhere else. They are never written to results/, so the
+ * engine stays the only writer of a result file and a rehearsal cannot leave debris in the
+ * demo workspace. POST /api/reset empties this map.
+ */
+const MOCK = new Map();
+let mockPlaying = null;
+
 function readResults() {
   let files = [];
   try {
@@ -78,7 +99,14 @@ function readResults() {
       out.push({ ...d, memo, decision, _mtime: fs.statSync(path.join(dirs.results, f)).mtimeMs });
     } catch { /* a half-written file on the next tick is normal, skip it */ }
   }
-  return out.sort((a, b) => b._mtime - a._mtime);
+  // A mock OVERRIDES a real result with the same id for as long as it is loaded, because
+  // the demo workspace already holds a real cold 006 and the warm script has to be able to
+  // replace it on screen. Every mock card is badged `_mock` so nobody mistakes one for a
+  // live sweep, and POST /api/reset drops the overlay and brings the real results back.
+  const mocked = new Set(MOCK.keys());
+  const merged = out.filter((s) => !mocked.has(s.shipment_id));
+  for (const m of MOCK.values()) merged.push(m);
+  return merged.sort((a, b) => b._mtime - a._mtime);
 }
 
 function precedentCount() {
@@ -95,6 +123,18 @@ function broadcast(event, data) {
   const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   for (const res of clients) { try { res.write(payload); } catch { clients.delete(res); } }
 }
+
+/**
+ * Emit one lifecycle event. The SSE event name is the envelope's `type`, so the page can
+ * addEventListener("memory.recalled", ...) directly, and the same {type, shipment_id, ts,
+ * payload} envelope is in the data for anything that would rather switch on it.
+ */
+function emit(envelope) {
+  broadcast(envelope.type, envelope);
+}
+
+const logEvent = (shipment_id, msg, level = "info") =>
+  emit({ type: "log", shipment_id, ts: new Date().toISOString(), payload: { level, msg } });
 
 let debounce = null;
 function onChange(reason) {
@@ -198,6 +238,8 @@ const server = http.createServer(async (req, res) => {
         };
         fs.writeFileSync(path.join(dirs.decisions, `${id}.decision.json`), JSON.stringify(decision, null, 2));
         onChange("decision");
+        logEvent(id, `APPROVED by human (console)`, "good");
+        emit({ type: "review.done", shipment_id: id, ts: decision.at, payload: { action: "APPROVE" } });
         return send(res, 200, { ok: true, decision });
       }
 
@@ -218,6 +260,15 @@ const server = http.createServer(async (req, res) => {
         onChange("precedent");
         let recorded = null;
         try { recorded = JSON.parse(stdout); } catch { /* tool prints json, but do not die on it */ }
+        logEvent(id, `precedent recorded: line ${line} -> ${hts}`, "good");
+        emit({
+          type: "review.done", shipment_id: id, ts: new Date().toISOString(),
+          payload: { action: "RECLASSIFY", line, hts, reason },
+        });
+        emit({
+          type: "memory.committed", shipment_id: id, ts: new Date().toISOString(),
+          payload: { hts, line, reason, entries: precedentCount() },
+        });
         return send(res, 200, { ok: true, recorded, stdout: recorded ? undefined : stdout });
       }
 
@@ -266,6 +317,56 @@ const server = http.createServer(async (req, res) => {
       }
       const { stdout } = await runNode(args);
       return send(res, 200, { memory: withMemory, result: JSON.parse(stdout) });
+    }
+
+    /**
+     * DEV ONLY. Replays one scripted shipment lifecycle over SSE so the console can be
+     * built and rehearsed without the engine, the agent, the model or the box. Holds the
+     * result in memory; writes nothing. Figures come from mock_events.mjs, which was
+     * pasted out of real engine output.
+     */
+    if (p.startsWith("/api/mock/") && req.method === "POST") {
+      const n = p.slice("/api/mock/".length);
+      const script = SCRIPTS[n];
+      if (!script) return send(res, 404, { error: `no mock script ${n}. have ${Object.keys(SCRIPTS).join(", ")}` });
+      if (mockPlaying) return send(res, 409, { error: `script ${mockPlaying} is still playing` });
+
+      mockPlaying = n;
+      // Reply immediately; the script plays out over SSE behind the response.
+      send(res, 200, { ok: true, script: Number(n), events: script.length });
+      play(script, async (event) => {
+        // rules.done carries a full result. Park it so /api/shipments can serve it and the
+        // page renders the same way it does for a real sweep.
+        if (event.type === "rules.done" && event.payload?.shipment_id) {
+          MOCK.set(event.payload.shipment_id, { ...event.payload, memo: null, decision: null, _mock: true, _mtime: Date.now() });
+        }
+        if (event.type === "memo.ready" && MOCK.has(event.shipment_id)) {
+          MOCK.get(event.shipment_id).memo = event.payload.memo;
+        }
+        emit(event);
+        // Nudge the page to re-read /api/shipments once the result exists.
+        if (event.type === "rules.done" || event.type === "memo.ready") {
+          broadcast("refresh", { reason: "mock", at: event.ts, precedents: precedentCount() });
+        }
+      }).catch((e) => logEvent(null, `mock script ${n} failed: ${e.message}`, "warn"))
+        .finally(() => { mockPlaying = null; });
+      return;
+    }
+
+    /**
+     * Reset the rehearsal, NOT the record. Drops the mock overlay only. results/,
+     * decisions/ and precedents.jsonl are deliberately untouched: precedents.jsonl is
+     * append-only and is the audit trail, and a console that can erase it is a console
+     * that can destroy the demo. To start from an empty store, point --root at a fresh
+     * directory instead.
+     */
+    if (p === "/api/reset" && req.method === "POST") {
+      const dropped = MOCK.size;
+      MOCK.clear();
+      broadcast("reset", { at: new Date().toISOString(), dropped, precedents: precedentCount() });
+      broadcast("refresh", { reason: "reset", at: new Date().toISOString(), precedents: precedentCount() });
+      logEvent(null, `reset: dropped ${dropped} mock shipment(s). precedents.jsonl untouched.`);
+      return send(res, 200, { ok: true, dropped, note: "mock overlay only. results/, decisions/ and precedents.jsonl are untouched." });
     }
 
     return send(res, 404, { error: `no route ${p}` });
