@@ -57,6 +57,7 @@ SovereignDesk is an always-on import-compliance triage agent for U.S. customs br
 1. **The engine decides, the LLM only explains.** The model never picks a code, a rate, a flag or a duty figure. Structural, not a prompt preference. It answers every hallucination question.
 2. **Nothing leaves the box.** OpenShell network policy is DROP, loopback only, no allowlist, no exceptions. Stronger than "only a memo leaves", and it deletes the biggest venue risk, which is wifi. Proof on camera: `curl -m 5 https://hts.usitc.gov` fails inside the sandbox while the pipeline keeps running.
 3. **The second memo must cite the first shipment's precedent.** The thesis, protected above memo quality and UI polish. Everything else degrades first.
+4. The system never guesses outside its operating envelope. Unknown or contradictory cases are frozen for human adjudication.
 
 ### Architecture
 
