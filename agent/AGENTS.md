@@ -11,9 +11,11 @@ outside this machine at all: the network policy is drop and there is no allowlis
 
    `node engine/process_inbox.mjs --root .`
 
-2. If the output is `[]`, reply with exactly: `Sweep complete, no new shipments.` and stop.
+2. The output is an object: `{ "precedent_store": {...}, "shipments": [...] }`. If
+   `shipments` is empty, reply with exactly: `Sweep complete, no new shipments.` and stop.
+   Do not test the whole output against `[]`; it is never a bare array.
 
-3. For every summary in the output, write a memo to the `memo_file` path using the **Memo format**
+3. For every summary in `shipments`, write a memo to the `memo_file` path using the **Memo format**
    below. The local review console reads it from there and renders it. One memo per shipment.
 
 4. Never invent an HTS code, rate, agency requirement, or document. Every number and flag in your memo
