@@ -199,7 +199,34 @@ on 27018 should not be rebuilt for a permission check.
 
 ---
 
-## 8. Still open
+## 8. The swap is live in the engine, and it changes the outcome
+
+`MEMORY_RETRIEVAL=hybrid` switches `engine/triage.mjs` from token overlap to cosine over
+local embeddings. Off by default; unset, the engine is byte-identical (cold sample 006 is
+still `NEEDS_REVIEW / 8513.10.20.00 / 0.6 / 2362.5`).
+
+Measured on the box, same shipment file, same precedent store, one env var
+(`mongo/demo_retrieval_ab.sh`). The line is a **plural rewording** of a description a broker
+already ruled on:
+
+```
+probe: "LED night lights, USB rechargeable, portable"
+
+token overlap    NEEDS_REVIEW   hts 9405.11.60.10  conf 0.62  precedent applied=false sim=0.86
+semantic         READY          hts 9405.11.60.10  conf 0.94  precedent applied=true  sim=0.93
+```
+
+Same code, same duty. Different **behaviour**: token overlap sends an obviously-identical
+product to a human because an `s` cost it 0.04 against the bind bar; cosine applies the
+broker's ruling and the shipment clears.
+
+`PRECEDENT_FLOOR` and `PRECEDENT_BIND` are untouched: cosine's calibrated bars (0.75 / 0.90)
+are mapped knot-for-knot onto the engine's scale by `cosineToEngineScale`, so the two-tier
+rule keeps its exact meaning.
+
+---
+
+## 9. Still open
 
 - **An index-freshness probe.** `doctor.mjs` should poll until a just-written document is
   actually retrievable, rather than trusting `queryable`. Section 6 is the reason.
