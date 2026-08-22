@@ -189,7 +189,9 @@ function precedentFor(description) {
   let best = null, bestSim = 0;
   for (const p of PRECEDENTS) {
     const sim = p.sig === sig ? 1 : jaccard(sig, p.sig);
-    if (sim > bestSim) { bestSim = sim; best = p; }
+    // >= so the NEWEST record wins a similarity tie (file order = append order): a broker
+    // must be able to correct their own correction with a later reclassify.
+    if (sim >= bestSim && sim > 0) { bestSim = sim; best = p; }
   }
   if (!best || bestSim < PRECEDENT_FLOOR) return null;
   return { ...best, similarity: Math.round(bestSim * 100) / 100, exact: bestSim === 1 };
