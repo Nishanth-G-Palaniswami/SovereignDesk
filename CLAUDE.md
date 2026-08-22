@@ -128,9 +128,9 @@ truth for every rate in this repo.**
   keys off the shipment's `mode`. The MPF min and max are reset every fiscal year by CBP and
   the committed figures are marked `VERIFY-CBP-FY2026`, so do not quote them as fact.
   `effective_rate` stays duty-only on purpose; fees are reported separately.
-- `pga_flags.json` and `lpco_rules.json` are still demo tables. That is the last
-  placeholder surface in the repo and lane 3 owns it. Say so out loud rather than implying
-  they are authoritative.
+- `pga_flags.json` and `lpco_rules.json` are still demo tables and lane 3 owns them. Together
+  with the `VERIFY-CBP-FY2026` MPF clamp above they are the two placeholder surfaces left in
+  the repo. Say so out loud rather than implying they are authoritative.
 
 ### precedents.jsonl
 
@@ -230,24 +230,27 @@ Corrections the data swap produced, worth knowing when a judge probes: 8471 (lap
 25% Section 301, not 0%. 4202 (bags) is 25%, not 7.5%. 9503 (toys) carries none, not 7.5%.
 9405.11.60.10 is 7.6%, not 3.9%.
 
-## Open finding: sample 001 does not reach READY
+## Resolved: sample 001 reaches READY
 
-`HACKATHON_BIBLE.md` claims sample 001 reaches READY. It does not, and never did. Line 1 is
-"Cast iron pump casing for centrifugal liquid pump, without engine". The engine scores
-`8413.70.20.05` (a complete centrifugal pump) at 15 and `8413.91.90.96` (parts of pumps) at
-13, giving confidence 0.54 and `LOW_CONFIDENCE`.
+**RESOLVED 2026-08-22.** Line 1 is "Cast iron pump casing for centrifugal liquid pump,
+without engine". A casing is a part of a pump, not a pump, and the engine used to rank the
+complete pump first at confidence 0.54.
 
-**The engine's second choice is the correct one.** A casing is a part of a pump, not a pump.
-The parts-vs-whole logic at `engine/triage.mjs:141-145` is already firing; the problem is
-data. The greedy keywords `liquid pump` on `8413.70.20.05` outrun the halving penalty.
+The cause was a side effect of the USITC data swap. `rowIsParts` tested
+`rowDesc.has("part")`, and after the swap every description is the joined ancestor heading
+text, which for chapter 8413 reads "Pumps for liquids ... part thereof:". That made it true
+for the whole-machine row as well, so the `+4` parts boost cancelled and the halving at
+`:145` never ran at all.
 
-Two one-line fixes, both needing a full re-sweep afterwards:
+Neither obvious one-liner worked, and both were measured on all six samples: moving the
+penalty from 0.5 to 0.35 alone moved zero samples, and trimming the greedy `liquid pump`
+keyword flipped the code but left confidence at 0.54.
 
-1. Trim the greedy keyword on `8413.70.20.05` (drop `liquid pump`, keep `centrifugal pump`).
-   Narrower, cannot affect non-pump lines.
-2. Strengthen the whole-machine penalty at `engine/triage.mjs:145` from `0.5` to about `0.35`.
+The fix is both halves together: `:143` now tests the heading path for a real segment,
+`/(?:^|,)\s*parts:/i`, and `:145` is 0.35. Sample 001 line 1 is now `8413.91.90.96` at
+**0.77**, READY. Sample 004 line 1 goes 0.73 to 0.92. Samples 002, 003, 005 and 006 are
+unchanged cold and warm, so the precedent demo is untouched. Duty on 001 does not move
+($1,015 on $4,000): both 8413 lines are Free MFN plus 25% Section 301, so this was about
+being right, not about money. `scripts/smoke.sh` now asserts all three values.
 
-The `0.5` multiplier is on line 145. Line 143 is `const rowIsParts = ...` and editing it
-does nothing. Verified 2026-08-22 after the fee change shifted line numbers.
 
-Lane 3 decides this early because it changes the first beat of the demo.

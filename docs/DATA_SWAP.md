@@ -10,7 +10,9 @@ Rebuild at any time:
 node scripts/build_hts_from_usitc.mjs --archive engine/data/usitc/hts_2026_rev_7.json
 ```
 
-Originals are kept beside the new files as `*.placeholder.bak`.
+`backupOnce()` writes `*.placeholder.bak` beside each table on the FIRST run only, so
+re-running never clobbers the pristine copy. They are gitignored, so a fresh clone does not
+have them: the pre-swap values live in this file and in git history, not on disk.
 
 ## Why the whole duty stack is sourceable from one public file
 
@@ -88,7 +90,7 @@ rate and/or with the fabricated §122 surcharge still switched on.
 These are the numbers the shipped config produces. Verified by running the sweep from a
 clean extract of this zip.
 
-## Open finding: sample 001 does not reach READY
+## Resolved: sample 001 now reaches READY
 
 `HACKATHON_BIBLE.md` §3.4 claims sample 001 → READY. It does not, and it did not before
 the data swap either. Line 1 is:

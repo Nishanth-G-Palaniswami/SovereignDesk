@@ -14,7 +14,14 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-WS=".smoke/run-$$"          # gitignored. one dir per run, so parallel runs cannot collide
+# Gitignored scratch workspace, one per run. $$ alone is NOT enough: PIDs get reused, and a
+# leftover run dir already has its inbox drained into processed/, so the sweep finds nothing,
+# produces zero results and every field assertion below fails for no real reason. Pick a name
+# that does not exist yet. Nothing here is ever cleaned up automatically because this script
+# must not delete anything; .smoke/ is safe to remove by hand at any time.
+WS=".smoke/run-$$"
+n=0
+while [ -e "$WS" ]; do n=$((n+1)); WS=".smoke/run-$$-$n"; done
 FAIL=0
 
 pass() { printf '  ok    %s\n' "$1"; }
@@ -82,6 +89,16 @@ expect "006 cold confidence" "$(field "$R6" 'lines.0.confidence')"      "0.6"
 expect "006 cold status"     "$(field "$R6" 'shipment_summary.status')" "NEEDS_REVIEW"
 expect "006 cold duty"       "$(field "$R6" 'lines.0.duty.duty_est')"   "2362.5"
 expect "004 declared mismatch flagged" "$(field "$R4" 'shipment_summary.flags.0')" "DECLARED_DIFFERS"
+
+# Sample 001 line 1 is "Cast iron pump casing ... without engine". A casing is a PART of a
+# pump, not a pump. Both halves of the parts-vs-whole logic have to fire for this to land:
+# triage.mjs:143 must test the heading path for a real "Parts:" segment (rowDesc.has("part")
+# was true for the whole-machine row too, because the USITC heading says "part thereof"), and
+# the halving at :145 must be 0.35. Either alone regresses this to NEEDS_REVIEW.
+R1="$WS/results/SHP-2026-0822-001.result.json"
+expect "001 classifies the casing as a pump PART" "$(field "$R1" 'lines.0.hts')" "8413.91.90.96"
+expect "001 confidence clears the 0.70 floor"     "$(field "$R1" 'lines.0.confidence')" "0.77"
+expect "001 reaches READY"                        "$(field "$R1" 'shipment_summary.status')" "READY"
 
 # ---------------------------------------------------------------- 4. duty stack
 echo

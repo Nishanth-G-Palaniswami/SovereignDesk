@@ -140,9 +140,13 @@ function scoreRow(row, descTokens) {
   for (const t of descTokens) if (rowDesc.has(t)) score += 1;
   // "Parts of X" vs "X": if the line reads like a part, prefer parts headings and halve whole-machine headings
   const looksLikePart = [...descTokens].some((t) => PART_TOKENS.has(t));
-  const rowIsParts = rowDesc.has("part");
+  // NOT rowDesc.has("part"): after the USITC swap every description is the joined ancestor
+  // heading text, and the chapter 8413 heading is "Pumps for liquids ... part thereof:", so
+  // that test was true for the whole-machine row too. The boost cancelled and the halving
+  // below never ran. Test the heading path for a real "Parts:" segment instead.
+  const rowIsParts = /(?:^|,)\s*parts:/i.test(row.description);
   if (looksLikePart && rowIsParts && score > 0) { score += 4; hits.push("[parts-heading boost]"); }
-  if (looksLikePart && !rowIsParts && row.description.toLowerCase().includes("pump")) score = Math.round(score * 0.5 * 100) / 100;
+  if (looksLikePart && !rowIsParts && row.description.toLowerCase().includes("pump")) score = Math.round(score * 0.35 * 100) / 100;
   return { score, hits };
 }
 function classify(description) {

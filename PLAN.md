@@ -95,7 +95,7 @@ SovereignDesk is an always-on import-compliance triage agent for U.S. customs br
 | Sandbox | OpenShell, policy DROP, FS scoped to the share mount | narrow the FS scope; DROP is never what gets relaxed |
 | Agent | OpenClaw cron, 2 minute tick | `node engine/process_inbox.mjs --root <ws>` by hand |
 | Engine | Node `.mjs`, zero deps, no `package.json`, no build | none, `bash scripts/smoke.sh` is green today |
-| Memory | `precedents.jsonl`, Jaccard over sorted description tokens | lower `PRECEDENT_FLOOR` (`engine/triage.mjs:176`) from 0.55 toward 0.40 |
+| Memory | `precedents.jsonl`, Jaccard over sorted description tokens | none. Do NOT lower `PRECEDENT_FLOOR` (`engine/triage.mjs:176`): a different product already matches at 0.75 |
 | Review | `node lanes/6-channel-ui/server.mjs --root <ws> [--port 7777]` | `node engine/record_precedent.mjs ...` in a terminal, on camera |
 | Tariff data | `engine/data/usitc/hts_2026_rev_7.json`, 35,496 rows, committed | none, nothing downloads at the venue |
 
@@ -202,8 +202,9 @@ total payable $2,403.09.
 ### Still placeholder
 
 `engine/data/pga_flags.json` and `engine/data/lpco_rules.json` are demo tables (`_comment`:
-"Replace with your real PGA flag table"). Last placeholder surface in the repo, lane 3 owns
-it. Re-derive from the agencies' published requirements; do not port a table out of a
+"Replace with your real PGA flag table"), lane 3 owns them. They are not the only placeholder
+surface any more: the MPF minimum and maximum above are tagged `VERIFY-CBP-FY2026`. Two
+surfaces, say both. Re-derive from the agencies' published requirements; do not port a table out of a
 previous employer's codebase.
 
 ---
@@ -243,13 +244,13 @@ The engine result shape is already the contract and already frozen (`engine/tria
 
 Then every module returns hardcoded data: fake memo, fake precedent hit, fake feed.
 
-**Gate:** `bash scripts/smoke.sh` green against fakes. Run it on the box or in WSL, never Git Bash (MSYS paths break Node's resolution).
+**Gate:** `bash scripts/smoke.sh` green against fakes. It runs anywhere with bash and Node, Git Bash included: it uses paths relative to the repo root on purpose and its own header says not to reintroduce `mktemp` or `$PWD`. Verified `SMOKE PASSED` in Git Bash on Windows.
 
 ### Phase 2: wire the full pipeline on fakes
 
 Watcher, state machine, agent, console with a live feed. All lies, real wiring.
 
-**States.** Every transition appends `{shipment_id, from, to, at}` to `events.jsonl` at the workspace root, which the console feed tails:
+**States.** Planned: every transition appends `{shipment_id, from, to, at}` to `events.jsonl` at the workspace root. Nothing writes `events.jsonl` today and the console that is already built does not read it: `GET /api/stream` pushes SSE on any change under `results/`. Either build the writer or drop the file and keep the SSE feed, but do not document both.
 
 | state | entered when | event |
 |---|---|---|
@@ -266,7 +267,7 @@ Watcher, state machine, agent, console with a live feed. All lies, real wiring.
 
 - **1** keeps Qwen serving, stays on call.
 - **2** drafts the drop policy and the blocked-egress shot list. Does not apply the policy yet.
-- **3** sample 001 (`triage.mjs:141-145`: the greedy `liquid pump` keyword outruns the halving penalty), then `pga_flags.json` and `lpco_rules.json` re-derived from the agencies' published requirements. Re-sweep all six samples after every edit.
+- **3** sample 001 (`triage.mjs:141-145`: `rowIsParts` at `:143` is true for both 8413 rows, so the halving at `:145` never fires at all), then `pga_flags.json` and `lpco_rules.json` re-derived from the agencies' published requirements. Re-sweep all six samples after every edit.
 - **4** `node lanes/4-memory/eval_retrieval.mjs`, then the teardown rehearsal. Does not rebuild the store.
 - **5** the memo prompt in `agent/AGENTS.md`, the cron job, the merge queue.
 - **6** the console and the BuilderBase draft. `lanes/6-channel-ui/matrix_bridge.mjs` is a future-work spike (remote approval over a private mesh), not part of this build.
@@ -375,11 +376,16 @@ mirroring `record_precedent.mjs:39-46`, or signatures diverge silently; point th
 **Queue:**
 
 1. Sample 001. `8413.70.20.05` (whole pump) scores 15, `8413.91.90.96` (parts) 13, conf 0.54;
-   the parts line is right. Trim the greedy `liquid pump` keyword, or move the halving penalty at
-   `engine/triage.mjs:145` from 0.5 to about 0.35, then re-sweep all six. Decide first: it
-   changes the demo's first beat.
-2. `engine/data/pga_flags.json` and `lpco_rules.json`, the last placeholder surface;
-   `pga_flags.json:2` still says "Replace with your real PGA flag table." Re-derive the ten
+   the parts line is right. **RESOLVED 2026-08-22**, and it needed both halves of the
+   parts-vs-whole logic, not either one-liner. `rowIsParts` at `:143` tested
+   `rowDesc.has("part")`, true for the whole-machine row too because the chapter 8413
+   heading says "part thereof", so the boost cancelled and the halving at `:145` never ran.
+   Measured: the 0.5 to 0.35 change alone moved zero samples; the keyword trim alone left
+   confidence at 0.54. Now `:143` tests `/(?:^|,)\s*parts:/i` and `:145` is 0.35. 001 line 1
+   is `8413.91.90.96` at 0.77, READY; 004 goes 0.73 to 0.92; 002, 003, 005, 006 unchanged
+   cold and warm. `scripts/smoke.sh` asserts it.
+2. `engine/data/pga_flags.json` and `lpco_rules.json`, one of the two placeholder surfaces
+   (the other is the MPF clamp in item 3); `pga_flags.json:2` still says "Replace with your real PGA flag table." Re-derive the ten
    `requirement_id` rules from the agencies' own published requirements. Do not port a table out
    of a previous employer's codebase; this repo goes public.
 3. Fees at `engine/triage.mjs:265`: `surcharges.json` carries MPF min 32.71 / max 634.62 marked
@@ -426,10 +432,21 @@ curl -s -X POST 127.0.0.1:7777/api/replay -H 'content-type: application/json' \
   -d '{"shipment_id":"SHP-2026-0822-006","memory":false}'
 ```
 
-**Say the weakness first:** the tightest passing paraphrase clears the 0.55 floor by 0.006 while
-the worst false positive sits 0.35 below it, so the floor is far too conservative and could drop
-to roughly 0.40. "LED lamp", the terse description real invoices are full of, scores 0.286 and
-does not fire.
+**Say the weakness first, and say it accurately.** The floor is wrong in both directions and the
+measured numbers do not point one way:
+
+- Too tight for paraphrase: the tightest passing case clears 0.55 by 0.006, and "LED lamp", the
+  terse description real invoices are full of, scores 0.286 and does not fire.
+- Already too loose for a neighbouring product: "Portable USB rechargeable LED reading light
+  lamp" matches the night-light precedent at **0.75** and the engine promotes that line from cold
+  `8513.10.20.00` / 0.54 / `LOW_CONFIDENCE` to `9405.11.60.10` / 0.90 / `READY` with nobody
+  looking. Reproduced on the shipped config.
+
+**Do not recommend dropping the floor to 0.40.** That number comes from the harness's "headroom"
+line, which measures the nearest unrelated probe that does not fire (0.20), not the worst false
+positive that does. The recommendation to lane 3 is: leave the floor at 0.55 for the demo and
+surface `precedent.similarity` in the memo and on the console, so a fuzzy match is disclosed
+rather than hidden. Raising the floor instead breaks a case `eval_retrieval.mjs` asserts.
 
 **Hands over:** the A/B endpoint and its numbers to lane 6; the teardown recording to lane 2;
 the floor recommendation to lane 3.
@@ -482,8 +499,9 @@ console must never be what breaks the loop; edit `engine/*.mjs` or `agent/AGENTS
 
 **Queue:**
 
-1. `lanes/6-channel-ui/index.html`, the one missing file. `server.mjs` is complete and returns
-   500 "index.html is missing next to server.mjs" until you write it.
+1. `lanes/6-channel-ui/index.html` already exists (350 lines) beside `server.mjs` and the console
+   loads; `server.mjs` returns 500 "index.html is missing next to server.mjs" only if somebody
+   deletes it. Lane 6's job here is polish and projector legibility, not writing it.
 2. The memory ON/OFF toggle against `POST /api/replay`, which re-runs one shipment with and
    without the precedent store and writes nothing into `results/`, so it is safe on stage.
 3. The precedent badge: cold `8513.10.20.00` conf 0.60 `$2,362.50`, warm `9405.11.60.10` conf
@@ -559,14 +577,18 @@ Lane 6 also needs `policy-list` output and the two-terminal screenshot.
 
 Name these before a judge finds them.
 
-- **The precedent floor is too tight.** `node lanes/4-memory/eval_retrieval.mjs`: the tightest
-  passing paraphrase clears PRECEDENT_FLOOR (`triage.mjs:176`, 0.55) by 0.006, the nearest false
-  positive has 0.35 of headroom. It should drop toward 0.40. "LED lamp", the terse description
-  real invoices use, scores 0.286 and does not fire.
+- **The precedent floor is wrong in both directions, and we measured it.** `node
+  lanes/4-memory/eval_retrieval.mjs`: the tightest passing paraphrase clears PRECEDENT_FLOOR
+  (`triage.mjs:176`, 0.55) by 0.006, and "LED lamp", the terse description real invoices use,
+  scores 0.286 and does not fire. In the other direction a genuinely different product,
+  "Portable USB rechargeable LED reading light lamp", matches at 0.75 and is promoted to `READY`
+  at 0.90 unattended. The answer is disclosure, not a floor change: `precedent.similarity` goes
+  in the memo.
 - **Sample 001 never reached READY.** Pump casing: 8413.70.20.05 scores 15, 8413.91.90.96 scores
   13, confidence 0.54. The second choice is right, a casing is a part. The parts-vs-whole logic
-  at `triage.mjs:141-145` fires but the keyword "liquid pump" outruns it. One-line fix, trim the
-  keyword or move 0.5 to about 0.35 at `triage.mjs:145`, then re-sweep all six.
+  at `triage.mjs:141-145` only half fires: `rowIsParts` at `:143` is true for both 8413 rows, so
+  the boost cancels out and the halving at `:145` never runs. Neither one-liner alone reaches
+  `READY`, both measured. Fix `:143` and `:145` together, then re-sweep all six.
 - **Warm 006 reads READY while listing a missing DOE certification**: 9405 pulls a requirement
   8513 did not, and status comes from confidence and the declared check, not the LPCO list.
   Do not read that line aloud; if asked, say exactly that.
@@ -586,8 +608,9 @@ Name these before a judge finds them.
 | Judges read it as "just a rules engine" | Medium | Lead with the unattended loop, `curl` failing inside the sandbox while the pipeline runs, and an override surviving a sandbox rebuild. A wrong code is a penalty, not a typo: determinism is the pitch. |
 | Team size. The brief records 2 to 4 builders and we are 6 | Medium | Confirm with the organizers at check-in, before anyone opens a laptop. Lane 6 asks, lane 2 if it gets to the desk first. |
 | A fee figure quoted on camera is wrong | Medium | MPF min (`32.71`) and max (`634.62`) in `engine/data/surcharges.json` are tagged `VERIFY-CBP-FY2026` and CBP resets both each fiscal year. Confirm, or quote the 0.3464% rate and not the clamp. |
-| Sample 001 still lands `NEEDS_REVIEW` | Known, open | Lane 3. Trim the greedy `liquid pump` keyword on `8413.70.20.05`, or raise the penalty at `engine/triage.mjs:145` from 0.5 to about 0.35. Re-sweep all six samples. Not after freeze. |
-| `pga_flags.json` and `lpco_rules.json` read as fabricated | Low | Demo tables, the last placeholder surface in the repo. Say so before a judge asks. |
+| **A broker cannot correct their own correction.** `engine/triage.mjs:182` is `if (sim > bestSim)`, so on a similarity tie the FIRST precedent read wins and no later `reclassify` can ever displace it. Reproduced: two precedents for 006 line 1, the second by a different broker, and the engine keeps the first forever. That contradicts `agent/AGENTS.md` and `CLAUDE.md`, which both promise a precedent is superseded by a new `reclassify` | Confirmed | Lane 3, one character: `>` to `>=`. Verified working: newest wins, higher-similarity records still beat lower ones. Lane 5 merges. Until it lands, do not mistype an HTS on stage, there is no undo |
+| Sample 001 still lands `NEEDS_REVIEW` | Known, open | Lane 3. Neither one-liner alone works, both measured: the keyword trim leaves confidence at 0.54, and the 0.5 to 0.35 penalty change is a no-op because `rowIsParts` at `triage.mjs:143` never lets the halving fire. Fix `:143` and `:145` together, then re-sweep all six. Not after freeze. |
+| `pga_flags.json` and `lpco_rules.json` read as fabricated | Low | Demo tables. Say so before a judge asks, together with the other placeholder surface, the `VERIFY-CBP-FY2026` MPF clamp. |
 
 ### Non-goals
 
@@ -603,6 +626,6 @@ Name these before a judge finds them.
 Also later:
 
 - Classification over all 19,856 ten-digit lines in `engine/data/usitc/hts_2026_rev_7.json`. Keyword scoring runs on the 16 curated rows of `engine/data/hts_subset.csv`; the duty stack reads the full export.
-- Embeddings instead of Jaccard. The tightest passing paraphrase clears `PRECEDENT_FLOOR = 0.55` (`engine/triage.mjs:176`) by 0.006; "LED lamp", the description that dominates real invoices, scores 0.286 and never fires. The floor could drop to roughly 0.40.
+- Embeddings instead of Jaccard. The tightest passing paraphrase clears `PRECEDENT_FLOOR = 0.55` (`engine/triage.mjs:176`) by 0.006; "LED lamp", the description that dominates real invoices, scores 0.286 and never fires. Lowering the floor is not the fix, because a different product already matches at 0.75. A better retriever is.
 - Real PGA and LPCO tables re-derived from the agencies' published requirements, not ported out of a previous employer's codebase.
 - Multi-entry duty reporting. Fees are modelled at entry level (`engine/triage.mjs:265`), one shipment per entry.
