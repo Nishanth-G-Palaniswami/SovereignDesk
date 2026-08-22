@@ -26,13 +26,13 @@ export async function classify(description, limit = 3) {
   return d.collection(HTS).aggregate([
     { $rankFusion: {
         input: { pipelines: {
-          lexical: [{ $search: { index: "text_idx", text: { query: description, path: "description" } } }, { $limit: 50 }],
+          lexical: [{ $search: { index: "text_idx", text: { query: description, path: ["search_text", "description"] } } }, { $limit: 50 }],
           semantic: [{ $vectorSearch: { index: "vector_idx", path: "embedding", queryVector: qv, numCandidates: 400, limit: 50 } }],
         } },
         combination: { weights: { lexical: 1, semantic: 1 } },
     } },
     { $limit: limit },
-    { $project: { _id: 0, hts: 1, description: 1, mfn_rate: 1, rrf: { $meta: "score" } } },
+    { $project: { _id: 0, hts: 1, description: 1, search_text: 1, mfn_rate: 1, rrf: { $meta: "score" } } },
   ]).toArray();
 }
 
@@ -55,7 +55,7 @@ for (const q of queries) {
   const hits = await classify(q.text);
   console.log(`\n${q.src}: "${q.text}"${q.declared ? `   [declared ${q.declared}]` : ""}`);
   for (const h of hits) {
-    console.log(`   ${h.hts}  mfn ${(h.mfn_rate * 100).toFixed(1).padStart(5)}%  ${h.description.slice(0, 96)}`);
+    console.log(`   ${h.hts}  mfn ${(h.mfn_rate * 100).toFixed(1).padStart(5)}%  ${(h.search_text || h.description).slice(0, 96)}`);
   }
 }
 await close();

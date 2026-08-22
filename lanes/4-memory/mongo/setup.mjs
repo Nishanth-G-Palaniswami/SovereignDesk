@@ -44,7 +44,16 @@ await d.collection(HTS).createIndex({ hts: 1 }, { unique: true });
 
 async function ensureSearchIndex(coll, spec) {
   const have = await d.collection(coll).listSearchIndexes().toArray().catch(() => []);
-  if (have.some((i) => i.name === spec.name)) { console.log(`  ${coll}.${spec.name} exists`); return; }
+  const existing = have.find((i) => i.name === spec.name);
+  if (existing) {
+    // Definitions drift (search_text was added after the first load). Update in place
+    // rather than making the caller drop and rebuild.
+    if (JSON.stringify(existing.latestDefinition) !== JSON.stringify(spec.definition)) {
+      await d.collection(coll).updateSearchIndex(spec.name, spec.definition);
+      console.log(`  ${coll}.${spec.name} definition updated`);
+    } else console.log(`  ${coll}.${spec.name} exists`);
+    return;
+  }
   await d.collection(coll).createSearchIndex(spec);
   console.log(`  ${coll}.${spec.name} created`);
 }
@@ -52,7 +61,8 @@ async function ensureSearchIndex(coll, spec) {
 for (const coll of [PRECEDENTS, HTS]) {
   await ensureSearchIndex(coll, {
     name: "text_idx", type: "search",
-    definition: { mappings: { dynamic: false, fields: { description: { type: "string" } } } },
+    // search_text is the leaf-first, noise-stripped text; description stays for display.
+    definition: { mappings: { dynamic: false, fields: { description: { type: "string" }, search_text: { type: "string" } } } },
   });
   await ensureSearchIndex(coll, {
     name: "vector_idx", type: "vectorSearch",
