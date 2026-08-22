@@ -1,0 +1,15 @@
+{
+  "shipment_id": "SHP-2026-0822-900",
+  "importer": "Lane 4 retrieval fixture",
+  "supplier": "n/a",
+  "origin_country": "CN",
+  "incoterm": "FOB",
+  "mode": "ocean",
+  "currency": "USD",
+  "documents_on_file": [],
+  "lines": [
+    { "line": 1, "description": "Portable USB rechargeable LED reading light lamp", "qty": 100, "unit_value": 6.5 },
+    { "line": 2, "description": "LED flashlight, aluminium body, dry battery powered", "qty": 100, "unit_value": 4.0 },
+    { "line": 3, "description": "Cast iron pump casing for centrifugal liquid pump, without engine", "qty": 20, "unit_value": 88.0 }
+  ]
+}
