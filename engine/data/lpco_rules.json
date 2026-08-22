@@ -1,0 +1,43 @@
+{
+  "_comment": "requirement_id -> documents (Licenses, Permits, Certificates, Other) the entry packet must contain. BASE applies to every shipment. Matching against shipment.documents_on_file is a loose substring match on the part before ', '.",
+  "BASE": [
+    "Commercial invoice",
+    "Packing list",
+    "Bill of lading or air waybill, transport document",
+    "ISF 10+2 filing confirmation, ocean shipments only",
+    "CBP Form 7501, draft entry summary"
+  ],
+  "FDA_PRIOR_NOTICE": [
+    "FDA Prior Notice confirmation number, PNC, filed before arrival",
+    "Foreign manufacturer FDA Food Facility Registration number"
+  ],
+  "FDA_FSVP": [
+    "FSVP importer name, email and DUNS number"
+  ],
+  "FDA_FACILITY_REG": [
+    "Foreign manufacturer FDA Food Facility Registration number"
+  ],
+  "NOAA_SIMP": [
+    "IFTP, International Fisheries Trade Permit number",
+    "SIMP harvest and landing data record, retained for audit"
+  ],
+  "CPSC_CPC": [
+    "Children's Product Certificate, CPC",
+    "Third-party test report, ASTM F963, CPSC-accepted laboratory"
+  ],
+  "EPA_ENGINE_3520_21": [
+    "EPA Form 3520-21, nonroad engine import declaration"
+  ],
+  "FCC_SDOC": [
+    "FCC Supplier's Declaration of Conformity, 47 CFR 2.906"
+  ],
+  "DOE_CERT": [
+    "DOE compliance certification report, Compliance Certification Management System"
+  ],
+  "FDA_CERAMICWARE": [
+    "Ceramicware lead and cadmium leach test certificate, food-contact use"
+  ],
+  "CBP_ADCVD_CHECK": [
+    "AD/CVD scope determination memo, case numbers and cash deposit rate"
+  ]
+}

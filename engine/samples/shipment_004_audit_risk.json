@@ -1,0 +1,13 @@
+{
+  "shipment_id": "SHP-2026-0822-004",
+  "importer": "Acme Flow Systems LLC",
+  "supplier": "Shenzhen Flow Components Co., Ltd.",
+  "origin_country": "CN",
+  "mode": "air",
+  "incoterm": "FOB",
+  "currency": "USD",
+  "documents_on_file": ["commercial invoice", "packing list", "air waybill", "CBP Form 7501"],
+  "lines": [
+    { "line": 1, "description": "Pump seal kit including impeller and housing parts for liquid pump", "qty": 300, "unit": "EA", "unit_value": 22.00, "hts_declared": "4016.93.50.50" }
+  ]
+}

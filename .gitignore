@@ -1,0 +1,31 @@
+# runtime workspace, never committed (but keep the layout doc)
+workspace/*
+!workspace/README.md
+ws/
+w/
+inbox/
+results/
+memos/
+decisions/
+processed/
+precedents.jsonl
+
+# secrets
+.env
+.env.local
+*.token
+
+# models and weights live on the USB, not in git
+models/
+*.gguf
+*.safetensors
+
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+
+# build script backups
+*.placeholder.bak
+wv*/
+.smoke/

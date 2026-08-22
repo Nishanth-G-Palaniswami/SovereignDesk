@@ -1,0 +1,13 @@
+{
+  "shipment_id": "SHP-2026-0822-002",
+  "importer": "Bluewater Foods Inc.",
+  "supplier": "Mekong Aqua Export JSC",
+  "origin_country": "VN",
+  "mode": "ocean",
+  "incoterm": "CIF",
+  "currency": "USD",
+  "documents_on_file": ["commercial invoice", "packing list", "bill of lading", "ISF 10+2 filing confirmation"],
+  "lines": [
+    { "line": 1, "description": "Frozen peeled shrimp, 16/20 count, 2 kg bags", "qty": 4000, "unit": "KG", "unit_value": 9.40, "hts_declared": "0306.17.00.41" }
+  ]
+}

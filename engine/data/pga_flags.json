@@ -1,0 +1,47 @@
+{
+  "_comment": "Keyed by HTS prefix (digits, dots optional). semantic: must | may. 'may' flags become DISCLAIMABLE when any disclaim_if_any phrase appears in the line description, else CONFIRM. Replace with your real PGA flag table.",
+  "8413": [
+    { "agency": "EPA", "requirement_id": "EPA_ENGINE_3520_21", "requirement": "Nonroad engine declaration (EPA Form 3520-21)", "semantic": "may",
+      "disclaim_if_any": ["casing", "impeller", "part", "parts", "housing", "seal kit", "without engine", "electric"] }
+  ],
+  "0306": [
+    { "agency": "FDA", "requirement_id": "FDA_PRIOR_NOTICE", "requirement": "Prior Notice of imported food", "semantic": "must" },
+    { "agency": "FDA", "requirement_id": "FDA_FSVP", "requirement": "Foreign Supplier Verification Program (FSVP) importer data", "semantic": "must" },
+    { "agency": "NOAA", "requirement_id": "NOAA_SIMP", "requirement": "Seafood Import Monitoring Program (shrimp is a covered species)", "semantic": "must" }
+  ],
+  "9503": [
+    { "agency": "CPSC", "requirement_id": "CPSC_CPC", "requirement": "Children's Product Certificate + third-party testing (ASTM F963)", "semantic": "must" }
+  ],
+  "2106": [
+    { "agency": "FDA", "requirement_id": "FDA_PRIOR_NOTICE", "requirement": "Prior Notice of imported food", "semantic": "must" },
+    { "agency": "FDA", "requirement_id": "FDA_FSVP", "requirement": "Foreign Supplier Verification Program (FSVP) importer data", "semantic": "must" },
+    { "agency": "FDA", "requirement_id": "FDA_FACILITY_REG", "requirement": "Foreign food facility registration", "semantic": "must" }
+  ],
+  "6912": [
+    { "agency": "FDA", "requirement_id": "FDA_CERAMICWARE", "requirement": "Ceramicware lead/cadmium compliance (food-contact)", "semantic": "may",
+      "disclaim_if_any": ["decorative", "not for food", "ornamental", "planter", "vase"] }
+  ],
+  "9405": [
+    { "agency": "FCC", "requirement_id": "FCC_SDOC", "requirement": "Supplier's Declaration of Conformity (digital device)", "semantic": "may",
+      "disclaim_if_any": ["non-electronic", "candle", "oil lamp"] },
+    { "agency": "DOE", "requirement_id": "DOE_CERT", "requirement": "Energy conservation standards certification (lamps)", "semantic": "may",
+      "disclaim_if_any": ["fixture only", "no lamp included", "without bulb"] }
+  ],
+  "8513": [
+    { "agency": "FCC", "requirement_id": "FCC_SDOC", "requirement": "Supplier's Declaration of Conformity (digital device)", "semantic": "may",
+      "disclaim_if_any": ["incandescent", "no electronics", "non-digital"] }
+  ],
+  "8504": [
+    { "agency": "FCC", "requirement_id": "FCC_SDOC", "requirement": "Supplier's Declaration of Conformity (digital device)", "semantic": "may", "disclaim_if_any": ["passive", "transformer only"] },
+    { "agency": "DOE", "requirement_id": "DOE_CERT", "requirement": "External power supply efficiency certification", "semantic": "may", "disclaim_if_any": ["internal", "not external"] }
+  ],
+  "8471": [
+    { "agency": "FCC", "requirement_id": "FCC_SDOC", "requirement": "Supplier's Declaration of Conformity (digital device)", "semantic": "must" }
+  ],
+  "8501": [
+    { "agency": "DOE", "requirement_id": "DOE_CERT", "requirement": "Small electric motor efficiency certification", "semantic": "may", "disclaim_if_any": ["dc motor", "brushless", "below scope", "toy"] }
+  ],
+  "7318": [
+    { "agency": "CBP", "requirement_id": "CBP_ADCVD_CHECK", "requirement": "Antidumping/countervailing duty scope check (steel fasteners)", "semantic": "must" }
+  ]
+}

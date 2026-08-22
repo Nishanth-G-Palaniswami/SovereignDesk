@@ -1,0 +1,14 @@
+{
+  "shipment_id": "SHP-2026-0822-001",
+  "importer": "Acme Flow Systems LLC",
+  "supplier": "Shenzhen Flow Components Co., Ltd.",
+  "origin_country": "CN",
+  "mode": "ocean",
+  "incoterm": "FOB",
+  "currency": "USD",
+  "documents_on_file": ["commercial invoice", "packing list", "bill of lading", "ISF 10+2 filing confirmation", "CBP Form 7501"],
+  "lines": [
+    { "line": 1, "description": "Cast iron pump casing for centrifugal liquid pump, without engine", "qty": 40, "unit": "EA", "unit_value": 85.00, "hts_declared": null },
+    { "line": 2, "description": "Rubber gasket set, vulcanized rubber, for pump flange", "qty": 500, "unit": "EA", "unit_value": 1.20, "hts_declared": null }
+  ]
+}

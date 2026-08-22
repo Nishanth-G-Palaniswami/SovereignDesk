@@ -1,0 +1,15 @@
+{
+  "shipment_id": "SHP-2026-0822-005",
+  "importer": "Northstar Electronics Distribution",
+  "supplier": "Dongguan PowerTech Ltd.",
+  "origin_country": "CN",
+  "mode": "ocean",
+  "incoterm": "FOB",
+  "currency": "USD",
+  "documents_on_file": ["commercial invoice", "packing list", "bill of lading", "ISF 10+2 filing confirmation", "CBP Form 7501", "FCC Supplier's Declaration of Conformity"],
+  "lines": [
+    { "line": 1, "description": "USB-C power adapter 65W external power supply", "qty": 2000, "unit": "EA", "unit_value": 6.80, "hts_declared": null },
+    { "line": 2, "description": "Hex head steel bolt M10x40 zinc plated", "qty": 50000, "unit": "EA", "unit_value": 0.06, "hts_declared": null },
+    { "line": 3, "description": "Plastic housing bracket for adapter", "qty": 2000, "unit": "EA", "unit_value": 0.40, "hts_declared": null }
+  ]
+}

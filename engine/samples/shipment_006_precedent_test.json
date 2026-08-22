@@ -1,0 +1,13 @@
+{
+  "shipment_id": "SHP-2026-0822-006",
+  "importer": "Toyland Imports Corp.",
+  "supplier": "Guangdong Brightway Lighting Co.",
+  "origin_country": "CN",
+  "mode": "ocean",
+  "incoterm": "FOB",
+  "currency": "USD",
+  "documents_on_file": ["commercial invoice", "packing list", "bill of lading", "ISF 10+2 filing confirmation", "CBP Form 7501", "FCC Supplier's Declaration of Conformity"],
+  "lines": [
+    { "line": 1, "description": "USB rechargeable LED night light lamp, portable", "qty": 1500, "unit": "EA", "unit_value": 4.20, "hts_declared": null }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "shipment_id": "SHP-2026-0822-003",
+  "importer": "Toyland Imports Corp.",
+  "supplier": "Guangdong Happy Play Mfg.",
+  "origin_country": "CN",
+  "mode": "ocean",
+  "incoterm": "FOB",
+  "currency": "USD",
+  "documents_on_file": ["commercial invoice", "packing list", "bill of lading", "ISF 10+2 filing confirmation", "CBP Form 7501"],
+  "lines": [
+    { "line": 1, "description": "Plush stuffed toy bear for infants under 3 years", "qty": 1200, "unit": "EA", "unit_value": 3.10, "hts_declared": "9503.00.00.73" },
+    { "line": 2, "description": "LED night light lamp, USB rechargeable, portable", "qty": 800, "unit": "EA", "unit_value": 4.50, "hts_declared": null }
+  ]
+}
