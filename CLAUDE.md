@@ -33,6 +33,11 @@ the tariff data and the demo numbers. Never brief from them.
 - No build step, no transpile, no bundler.
 - `node:fs`, `node:path`, `node:url`, `node:child_process` only.
 
+MongoDB mode (added 2026-08-22): with `MONGO_URI` set, precedent retrieval runs through a
+MongoDB Community index and the engine shells out to `mongosh` (a system binary, like node)
+via `node:child_process`. Still zero npm dependencies; never add the MongoDB driver. With
+`MONGO_URI` unset, behavior is byte-identical to the JSONL-only path.
+
 Rules for the event:
 
 - Do not add a dependency. Ask first, every time. `node_modules/` on a congested venue
@@ -100,7 +105,16 @@ Rebuild the tariff tables from the USITC export:
 node scripts/build_hts_from_usitc.mjs --archive engine/data/usitc/hts_2026_rev_7.json
 ```
 
-Smoke test: `scripts/smoke.sh`.
+Rebuild the MongoDB collections (both derived, both disposable; the JSONL is the truth):
+
+```bash
+MONGO_URI=... node scripts/mongo_sync.mjs --precedents <workspace>/precedents.jsonl
+MONGO_URI=... node scripts/mongo_load_tariff.mjs
+```
+
+Smoke test: `scripts/smoke.sh` (run it with `MONGO_URI` unset). Mongo gate:
+`scripts/smoke_mongo.sh` (prints SKIPPED and exits 0 without a local mongod; on Windows
+set `MONGOSH_BIN` to the real mongosh.exe with a `C:/`-style path, never `/c/...`).
 
 ## Data rules
 
@@ -148,6 +162,15 @@ override: `sig`, `description`, `hts`, `reason`, `by`, `shipment_id`, `line`, `a
 - Only `record_precedent.mjs` appends to it.
 - Retrieval is Jaccard similarity over sorted description tokens, so it generalises across
   rewording instead of needing an exact string match.
+- **The MongoDB collections are derived indexes, never the source of truth.** With
+  `MONGO_URI` set, retrieval runs through `sovereigndesk.precedents` (Jaccard in an
+  aggregation, same bind/suggest bars, newest wins ties via `seq`) and a precedent naming
+  a code outside the 16-row subset resolves against `sovereigndesk.tariff` (all 19,856
+  lines from `hts_full.csv`). Writers are exactly three: `record_precedent.mjs`
+  (dual-write after the JSONL append), `scripts/mongo_sync.mjs`, and
+  `scripts/mongo_load_tariff.mjs`. Any Mongo failure with `MONGO_URI` set is a loud engine
+  error, never a fallback; a count-parity guard refuses a stale or wrong-workspace index.
+  Env vars, the only ones the engine reads: `MONGO_URI`, `MONGO_DB`, `MONGOSH_BIN`.
 - NemoClaw is **not** the memory layer. NemoClaw is the install and stack layer. Anyone who
   says "NemoClaw stores the precedents" is wrong.
 
