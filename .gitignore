@@ -30,3 +30,6 @@ Thumbs.db
 wv*/
 .smoke/
 .plan-sections/
+
+# personal vault, not part of the submission
+vault/
