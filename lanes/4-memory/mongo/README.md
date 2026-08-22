@@ -25,6 +25,10 @@ node mongo/ab.mjs                                 # the comparison table
 
 ## Measured, 16 cases, one precedent in the store
 
+Reproduced on the GB10 (`nvidia-smi`, aarch64, Ubuntu 24.04.4) on 2026-08-22: all 16 cases
+identical to three decimals against the laptop run. Same Ollama 0.32.15 and the same
+`nomic-embed-text` blob (`0a109f422b47`) on both, which is why the bars transfer.
+
 |  | jaccard 0.55 / 0.90 | cosine 0.75 / 0.90 |
 |---|---|---|
 | true paraphrases that fire | 7/7 | 7/7 |
