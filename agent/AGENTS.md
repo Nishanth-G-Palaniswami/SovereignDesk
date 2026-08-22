@@ -44,6 +44,11 @@ You handle these when a human types them at you directly instead.
 
 ## Memo format (under 1,200 characters, it has to fit a console card)
 
+**This format is duplicated in `lanes/1-inference/write_memos.mjs` (`formatBlock()`).**
+Edit one, edit both, or the box and the dev boxes emit different memos and nobody notices
+until a field is missing on stage. Same rule as the tokenizer duplicated across
+`engine/triage.mjs` and `engine/record_precedent.mjs`.
+
 ```
 📦 <shipment_id> · <importer> · origin <origin_country>
 Status: READY ✅ | NEEDS_REVIEW ⚠️

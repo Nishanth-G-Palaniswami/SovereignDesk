@@ -44,6 +44,10 @@ const FORCE = has("--force");
 const resultsDir = path.join(ROOT, "results");
 const memosDir = path.join(ROOT, "memos");
 
+// DUPLICATED FORMAT: this block and the memo format in agent/AGENTS.md must stay in step.
+// Edit one, edit both. Same rule as the tokenizer duplicated across engine/triage.mjs and
+// engine/record_precedent.mjs.
+//
 // The memo format is the one in agent/AGENTS.md, but the [if ...] conditionals are resolved
 // HERE, deterministically, per shipment. A small model shown a conditional template copies
 // the brackets, fills branches whose JSON field is null, or drops branches that apply. So
