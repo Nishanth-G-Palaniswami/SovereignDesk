@@ -1,0 +1,7 @@
+{
+  "name": "sovereigndesk-memory",
+  "private": true,
+  "type": "module",
+  "description": "Lane 4 memory layer. Scoped here on purpose: engine/ stays zero-dependency.",
+  "dependencies": { "mongodb": "^6.12.0" }
+}
