@@ -1,10 +1,9 @@
 # SovereignDesk
 
-A one-day team build from the [Dell x NVIDIA Hackathon: Local AI on Dell Pro Max with GB10](https://luma.com/rvinoam5)
-in Boston (BuilderBase, October 3, 2026; 10:30 to 18:00 build window). It is a working demo
-of one idea, not a product: an import-compliance agent that keeps everything on one box and
-turns broker corrections into permanent memory. Read it as a sketch with real tariff data
-behind it.
+A one-day team build from the [Dell x NVIDIA Hackathon: Local AI on Dell Pro Max with GB10](https://luma.com/e9z7dmdj),
+New York City, August 22, 2026 (BuilderBase). It is a working demo of one idea, not a
+product: an import-compliance agent that keeps everything on one box and turns broker
+corrections into permanent memory. Read it as a sketch with real tariff data behind it.
 
 An always-on import-compliance agent for customs brokers that runs entirely on one local
 machine (a Dell Pro Max with GB10 in the reference build). Shipment files land in a watched
