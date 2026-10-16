@@ -1,10 +1,17 @@
 # SovereignDesk
 
-An always-on import-compliance agent that runs entirely inside one Dell Pro Max with GB10.
-Shipment files land in a watched folder. A deterministic engine classifies the tariff code,
-flags agency requirements, computes the duty stack and lists the missing documents. A local
-model writes a plain-English memo. A broker approves or corrects it on a web console served
-by the box itself, and every correction becomes permanent institutional knowledge.
+A one-day team build from the [Dell x NVIDIA Hackathon: Local AI on Dell Pro Max with GB10](https://luma.com/rvinoam5)
+in Boston (BuilderBase, October 3, 2026; 10:30 to 18:00 build window). It is a working demo
+of one idea, not a product: an import-compliance agent that keeps everything on one box and
+turns broker corrections into permanent memory. Read it as a sketch with real tariff data
+behind it.
+
+An always-on import-compliance agent for customs brokers that runs entirely on one local
+machine (a Dell Pro Max with GB10 in the reference build). Shipment files land in a watched
+folder. A deterministic engine suggests the tariff code, flags agency requirements, computes
+the duty stack and lists the missing documents. A local model writes a plain-English memo. A
+broker approves or corrects it on a web console served by the box itself, and every
+correction becomes permanent institutional knowledge.
 
 Nothing leaves the box. The network policy is drop, with no allowlist and no exceptions.
 That is not a constraint working against the product, it is the product: customs brokers
@@ -20,8 +27,10 @@ six lanes, the demo script, and the risks. Everything else here is reference.
 
 ## Running it
 
-The only prerequisite is Node 24. There is no `package.json`: nothing to `npm install`, no
-build step, no bundler, no Python. Clone and run.
+The only prerequisite is Node 24. The engine has no `package.json`: nothing to `npm install`,
+no build step, no bundler, no Python. Clone and run. (The optional Lane 4 memory layer under
+`lanes/4-memory/` is the one exception; it depends on MongoDB and is scoped there on purpose
+so `engine/` stays dependency-free.)
 
 ```bash
 git clone https://github.com/Nishanth-G-Palaniswami/SovereignDesk.git
@@ -95,7 +104,7 @@ engine/                     the deterministic engine. Node, zero dependencies.
   data/usitc/               the committed USITC export, 19,856 ten-digit lines
   samples/                  six synthetic shipments
 agent/AGENTS.md             standing orders the OpenClaw agent reads at run time
-lanes/                      per-lane code (box doctor, retrieval eval, console)
+lanes/                      per-lane code (box doctor, retrieval eval, memory, console)
 scripts/smoke.sh            the pre-merge gate. Node only.
 scripts/build_hts_from_usitc.mjs   rebuild the tariff tables from the export
 docs/DATA_SWAP.md           data provenance and what the real-data swap corrected
@@ -112,8 +121,19 @@ rate is the line's `general` field, and Section 301 membership is a footnote poi
 Chapter 99 heading whose own text states the surcharge, so each surcharge cites the heading
 that set it across 1,184 prefixes. Nothing is hand-typed.
 
+What the classifier actually scores against is narrower than the export. `classify()` in
+`engine/triage.mjs` keyword-matches shipment lines against `engine/data/hts_subset.csv`, a
+16-row curated subset whose rates and descriptions are copied from the export. The full
+19,856-line export is what the subset's rates and the Section 301 surcharge table
+(`surcharges.json`) are built from, and, when the optional Lane 4 memory layer is enabled,
+it is also where a precedent code recorded outside the subset is resolved. Widening the
+classification candidate set is a planned step, not a shipped one.
+
 The six shipment transactions are synthetic, on purpose. You cannot use a real broker's
 pricing and customer data without consent, which is the same argument the product rests on.
+
+This project is independent of any employer work. It was built on the public USITC export
+and synthetic shipments only.
 
 ## Non-goals, stated out loud
 
